@@ -49,7 +49,7 @@ async function syncFirebaseUserDoc(
   role = 'business_admin',
   venueName?: string
 ) {
-  const isSuper = user.email?.toLowerCase().includes('admin') || user.email?.toLowerCase().includes('super') || false;
+  const isSuper = role === 'super_admin' || user.email?.toLowerCase().includes('admin') || user.email?.toLowerCase().includes('super') || false;
   const resolvedRole = isSuper ? 'super_admin' : role;
   const cleanUid = user.uid.replace(/[^a-zA-Z0-9]/g, '').slice(0, 10) || Date.now().toString().slice(-6);
   const bizId = isSuper ? null : `biz_${cleanUid}`;
@@ -58,7 +58,7 @@ async function syncFirebaseUserDoc(
   const userProfile = {
     id: user.uid,
     email: user.email || 'user@venue.com',
-    name: customName || user.displayName || user.email?.split('@')[0] || 'Venue Admin',
+    name: customName || user.displayName || user.email?.split('@')[0] || (isSuper ? 'Super Admin' : 'Venue Admin'),
     role: resolvedRole,
     status: 'active' as const,
     businessId: bizId,
@@ -72,7 +72,21 @@ async function syncFirebaseUserDoc(
       const ref = doc(firestore, 'users', user.uid);
       const snap = await getDoc(ref);
       if (snap.exists()) {
-        return snap.data();
+        const data = snap.data();
+        const userIsSuper = data.role === 'super_admin' || isSuper || Boolean(data.isSuperAdmin);
+        const sanitized = {
+          ...data,
+          role: userIsSuper ? 'super_admin' : (data.role || 'business_admin'),
+          isSuperAdmin: userIsSuper,
+          businessId: userIsSuper ? null : data.businessId,
+          businessName: userIsSuper ? 'Platform' : data.businessName,
+        };
+        if (userIsSuper && (data.businessId || !data.isSuperAdmin)) {
+          try {
+            await setDoc(ref, sanitized, { merge: true });
+          } catch {}
+        }
+        return sanitized;
       }
 
       // Provision genuine unique business, outlet, and category for this genuine account

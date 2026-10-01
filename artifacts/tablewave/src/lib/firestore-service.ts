@@ -9,9 +9,6 @@ import {
   setDoc,
   updateDoc,
   deleteDoc,
-  query,
-  orderBy,
-  limit,
 } from 'firebase/firestore';
 import { firestore } from './firebase';
 
@@ -107,259 +104,123 @@ export interface FirestoreOrder {
   createdAt: string;
 }
 
+// Global SaaS Pricing Tiers (Platform configuration, not dummy data)
 const DEFAULT_PLANS: FirestorePlan[] = [
   { id: 'plan_starter', name: 'Starter', price: 29, interval: 'month', outletLimit: 1, itemLimit: 40, active: true, createdAt: new Date(Date.now() - 30 * 86400000).toISOString() },
   { id: 'plan_growth', name: 'Growth', price: 79, interval: 'month', outletLimit: 3, itemLimit: 120, active: true, createdAt: new Date(Date.now() - 25 * 86400000).toISOString() },
   { id: 'plan_enterprise', name: 'Enterprise', price: 199, interval: 'month', outletLimit: 10, itemLimit: 500, active: true, createdAt: new Date(Date.now() - 20 * 86400000).toISOString() },
 ];
 
-const DEFAULT_BUSINESSES: FirestoreBusiness[] = [
-  {
-    id: 'biz_demo_juniper',
-    name: 'The Juniper Room',
-    slug: 'juniper-room',
-    type: 'Restaurant',
-    status: 'active',
-    ownerEmail: 'owner@juniperroom.com',
-    planId: 'plan_growth',
-    planName: 'Growth',
-    outletCount: 2,
-    orderCount: 142,
-    expiresAt: new Date(Date.now() + 180 * 86400000).toISOString(),
-    createdAt: new Date(Date.now() - 60 * 86400000).toISOString(),
-  },
-  {
-    id: 'biz_demo_velvet',
-    name: 'Velvet Lounge & Terrace',
-    slug: 'velvet-lounge',
-    type: 'Hotel',
-    status: 'active',
-    ownerEmail: 'gm@velvetterrace.com',
-    planId: 'plan_enterprise',
-    planName: 'Enterprise',
-    outletCount: 1,
-    orderCount: 89,
-    expiresAt: new Date(Date.now() + 300 * 86400000).toISOString(),
-    createdAt: new Date(Date.now() - 40 * 86400000).toISOString(),
-  },
-  {
-    id: 'biz_demo_starlight',
-    name: 'Starlight Picturehouse',
-    slug: 'starlight-cinema',
-    type: 'Cinema/Theatre',
-    status: 'active',
-    ownerEmail: 'bar@starlightcinema.com',
-    planId: 'plan_starter',
-    planName: 'Starter',
-    outletCount: 1,
-    orderCount: 64,
-    expiresAt: new Date(Date.now() + 90 * 86400000).toISOString(),
-    createdAt: new Date(Date.now() - 15 * 86400000).toISOString(),
-  },
-];
-
-const DEFAULT_OUTLETS: FirestoreOutlet[] = [
-  { id: 'out_juniper_dt', businessId: 'biz_demo_juniper', name: 'Downtown Dining Room', slug: 'downtown', address: '142 Mercer St, Suite 4', active: true, tableCount: 14, createdAt: new Date().toISOString() },
-  { id: 'out_juniper_pt', businessId: 'biz_demo_juniper', name: 'Garden Patio', slug: 'patio', address: '142 Mercer St, Outdoor', active: true, tableCount: 8, createdAt: new Date().toISOString() },
-];
-
-const DEFAULT_CATEGORIES: FirestoreCategory[] = [
-  { id: 'cat_starters', businessId: 'biz_demo_juniper', name: 'Starters & Small Plates', sortOrder: 1, createdAt: new Date().toISOString() },
-  { id: 'cat_mains', businessId: 'biz_demo_juniper', name: 'Mains & Grills', sortOrder: 2, createdAt: new Date().toISOString() },
-  { id: 'cat_pizzas', businessId: 'biz_demo_juniper', name: 'Woodfired Pizzas', sortOrder: 3, createdAt: new Date().toISOString() },
-  { id: 'cat_drinks', businessId: 'biz_demo_juniper', name: 'Signature Cocktails & Wine', sortOrder: 4, createdAt: new Date().toISOString() },
-  { id: 'cat_desserts', businessId: 'biz_demo_juniper', name: 'Desserts', sortOrder: 5, createdAt: new Date().toISOString() },
-];
-
-const DEFAULT_ITEMS: FirestoreItem[] = [
-  {
-    id: 'item_arancini',
-    businessId: 'biz_demo_juniper',
-    categoryId: 'cat_starters',
-    name: 'Truffle & Wild Mushroom Arancini',
-    description: 'Crispy arborio risotto spheres, black truffle emulsion, 24-month parmesan crisp.',
-    price: 14,
-    imageUrl: 'https://images.unsplash.com/photo-1541529086526-db283c563270?w=600&auto=format&fit=crop&q=80',
-    available: true,
-    variants: [{ name: '3 Pieces', price: 0 }, { name: '5 Pieces', price: 6 }],
-    addOns: [{ name: 'Extra Truffle Aioli', price: 2.5 }],
-    createdAt: new Date().toISOString(),
-  },
-  {
-    id: 'item_ribeye',
-    businessId: 'biz_demo_juniper',
-    categoryId: 'cat_mains',
-    name: 'Dry-Aged Ribeye Steak (280g)',
-    description: 'Grass-fed Black Angus, bone marrow butter, blistered vine tomatoes, herb chimichurri.',
-    price: 36,
-    imageUrl: 'https://images.unsplash.com/photo-1544025162-d76694265947?w=600&auto=format&fit=crop&q=80',
-    available: true,
-    variants: [{ name: 'Medium Rare', price: 0 }, { name: 'Medium', price: 0 }, { name: 'Well Done', price: 0 }],
-    addOns: [{ name: 'Truffle Fries', price: 6 }, { name: 'Charred Broccolini', price: 5 }],
-    createdAt: new Date().toISOString(),
-  },
-  {
-    id: 'item_margherita',
-    businessId: 'biz_demo_juniper',
-    categoryId: 'cat_pizzas',
-    name: 'Margherita D.O.P.',
-    description: 'San Marzano tomatoes, buffalo mozzarella, fresh sweet basil, cold-pressed olive oil.',
-    price: 18,
-    imageUrl: 'https://images.unsplash.com/photo-1604382355076-af4b0eb60143?w=600&auto=format&fit=crop&q=80',
-    available: true,
-    variants: [{ name: '12 Inch', price: 0 }, { name: '16 Inch (Family)', price: 8 }],
-    addOns: [{ name: 'Burrata Topping', price: 5 }, { name: 'Hot Honey Drizzle', price: 2 }],
-    createdAt: new Date().toISOString(),
-  },
-  {
-    id: 'item_oldfashioned',
-    businessId: 'biz_demo_juniper',
-    categoryId: 'cat_drinks',
-    name: 'Smoked Rosemary Old Fashioned',
-    description: 'Small-batch Kentucky bourbon, demerara, angostura bitters, torched fresh rosemary.',
-    price: 16,
-    imageUrl: 'https://images.unsplash.com/photo-1514362545857-3bc16c4c7d1b?w=600&auto=format&fit=crop&q=80',
-    available: true,
-    variants: [],
-    addOns: [],
-    createdAt: new Date().toISOString(),
-  },
-  {
-    id: 'item_tiramisu',
-    businessId: 'biz_demo_juniper',
-    categoryId: 'cat_desserts',
-    name: 'Traditional Venetian Tiramisù',
-    description: 'Espresso-soaked savoiardi biscuits, whipped mascarpone zabaione, cocoa dust.',
-    price: 11,
-    imageUrl: 'https://images.unsplash.com/photo-1571877227200-a0d98ea607e9?w=600&auto=format&fit=crop&q=80',
-    available: true,
-    variants: [],
-    addOns: [],
-    createdAt: new Date().toISOString(),
-  },
-];
-
-const DEFAULT_ORDERS: FirestoreOrder[] = [
-  {
-    id: 'ord_101',
-    businessId: 'biz_demo_juniper',
-    outletId: 'out_juniper_dt',
-    businessName: 'The Juniper Room',
-    outletName: 'Downtown Dining Room',
-    tableNumber: '4',
-    customerName: 'Liam Vance',
-    customerPhone: '+1 (555) 234-8891',
-    status: 'new',
-    total: 68,
-    items: [
-      { itemId: 'item_ribeye', name: 'Dry-Aged Ribeye Steak (280g)', quantity: 1, unitPrice: 36, selectedVariant: 'Medium Rare', selectedAddOns: ['Truffle Fries'] },
-      { itemId: 'item_margherita', name: 'Margherita D.O.P.', quantity: 1, unitPrice: 18, selectedVariant: '12 Inch', selectedAddOns: [] },
-      { itemId: 'item_oldfashioned', name: 'Smoked Rosemary Old Fashioned', quantity: 1, unitPrice: 16, selectedVariant: '', selectedAddOns: [] },
-    ],
-    createdAt: new Date(Date.now() - 4 * 60000).toISOString(),
-  },
-  {
-    id: 'ord_102',
-    businessId: 'biz_demo_juniper',
-    outletId: 'out_juniper_dt',
-    businessName: 'The Juniper Room',
-    outletName: 'Downtown Dining Room',
-    tableNumber: '7',
-    customerName: 'Sarah Jenkins',
-    customerPhone: '+1 (555) 431-0922',
-    status: 'preparing',
-    total: 39,
-    items: [
-      { itemId: 'item_arancini', name: 'Truffle & Wild Mushroom Arancini', quantity: 2, unitPrice: 14, selectedVariant: '3 Pieces', selectedAddOns: [] },
-      { itemId: 'item_tiramisu', name: 'Traditional Venetian Tiramisù', quantity: 1, unitPrice: 11, selectedVariant: '', selectedAddOns: [] },
-    ],
-    createdAt: new Date(Date.now() - 14 * 60000).toISOString(),
-  },
-  {
-    id: 'ord_103',
-    businessId: 'biz_demo_juniper',
-    outletId: 'out_juniper_pt',
-    businessName: 'The Juniper Room',
-    outletName: 'Garden Patio',
-    tableNumber: '2',
-    customerName: 'Alex Rivera',
-    customerPhone: '+1 (555) 672-1109',
-    status: 'ready',
-    total: 54,
-    items: [
-      { itemId: 'item_margherita', name: 'Margherita D.O.P.', quantity: 2, unitPrice: 18, selectedVariant: '12 Inch', selectedAddOns: ['Burrata Topping'] },
-    ],
-    createdAt: new Date(Date.now() - 22 * 60000).toISOString(),
-  },
-  {
-    id: 'ord_104',
-    businessId: 'biz_demo_juniper',
-    outletId: 'out_juniper_pt',
-    businessName: 'The Juniper Room',
-    outletName: 'Garden Patio',
-    tableNumber: '5',
-    customerName: 'Chloe Martin',
-    customerPhone: '+1 (555) 890-4432',
-    status: 'completed',
-    total: 48,
-    items: [
-      { itemId: 'item_oldfashioned', name: 'Smoked Rosemary Old Fashioned', quantity: 3, unitPrice: 16, selectedVariant: '', selectedAddOns: [] },
-    ],
-    createdAt: new Date(Date.now() - 45 * 60000).toISOString(),
-  },
-];
-
-const DEFAULT_TEAM: FirestoreTeamMember[] = [
-  { id: 'usr_mock_superadmin', email: 'admin@tablewave.com', name: 'Abhishek Kumar (Super Admin)', role: 'super_admin', status: 'active', businessId: null, businessName: 'Platform', createdAt: new Date(Date.now() - 60 * 86400000).toISOString() },
-  { id: 'usr_mock_bizadmin', email: 'manager@juniperroom.com', name: 'Elena Rossi (Venue Admin)', role: 'business_admin', status: 'active', businessId: 'biz_demo_juniper', businessName: 'The Juniper Room', createdAt: new Date(Date.now() - 45 * 86400000).toISOString() },
-  { id: 'usr_mock_staff', email: 'kitchen@juniperroom.com', name: 'Marco Vance (Kitchen Staff)', role: 'staff', status: 'active', businessId: 'biz_demo_juniper', businessName: 'The Juniper Room', createdAt: new Date(Date.now() - 30 * 86400000).toISOString() },
-  { id: 'usr_mock_invitee', email: 'sophie.b@juniperroom.com', name: 'Sophie Blanc', role: 'staff', status: 'invited', businessId: 'biz_demo_juniper', businessName: 'The Juniper Room', createdAt: new Date(Date.now() - 2 * 86400000).toISOString() },
-];
-
 let isSeeding = false;
 let isSeeded = false;
 
-// Auto-seed Firestore if collection is empty
+// Purge any dummy records from Cloud Firestore so genuine accounts only see real data
+export async function cleanupDummyDataFromFirestore(): Promise<void> {
+  if (!firestore) return;
+
+  const dummyBizIds = ['biz_demo_juniper', 'biz_demo_velvet', 'biz_demo_starlight'];
+  const dummyOutlets = ['out_juniper_dt', 'out_juniper_pt'];
+  const dummyCats = ['cat_starters', 'cat_mains', 'cat_pizzas', 'cat_drinks', 'cat_desserts'];
+  const dummyItems = ['item_arancini', 'item_ribeye', 'item_margherita', 'item_oldfashioned', 'item_tiramisu'];
+  const dummyOrders = ['ord_101', 'ord_102', 'ord_103', 'ord_104'];
+  const dummyTeam = ['usr_mock_superadmin', 'usr_mock_bizadmin', 'usr_mock_staff', 'usr_mock_invitee'];
+
+  try {
+    for (const id of dummyBizIds) {
+      try { await deleteDoc(doc(firestore, 'businesses', id)); } catch {}
+    }
+    for (const id of dummyOutlets) {
+      try { await deleteDoc(doc(firestore, 'outlets', id)); } catch {}
+    }
+    for (const id of dummyCats) {
+      try { await deleteDoc(doc(firestore, 'categories', id)); } catch {}
+    }
+    for (const id of dummyItems) {
+      try { await deleteDoc(doc(firestore, 'items', id)); } catch {}
+    }
+    for (const id of dummyOrders) {
+      try { await deleteDoc(doc(firestore, 'orders', id)); } catch {}
+    }
+    for (const id of dummyTeam) {
+      try { await deleteDoc(doc(firestore, 'team', id)); } catch {}
+    }
+
+    // Scan collections for any lingering docs tagged with biz_demo
+    try {
+      const bizSnap = await getDocs(collection(firestore, 'businesses'));
+      for (const d of bizSnap.docs) {
+        if (d.id.startsWith('biz_demo_')) {
+          await deleteDoc(d.ref);
+        }
+      }
+    } catch {}
+
+    try {
+      const outSnap = await getDocs(collection(firestore, 'outlets'));
+      for (const d of outSnap.docs) {
+        const data = d.data();
+        if (data.businessId?.startsWith('biz_demo_') || d.id.startsWith('out_juniper_')) {
+          await deleteDoc(d.ref);
+        }
+      }
+    } catch {}
+
+    try {
+      const catSnap = await getDocs(collection(firestore, 'categories'));
+      for (const d of catSnap.docs) {
+        const data = d.data();
+        if (data.businessId?.startsWith('biz_demo_') || d.id.startsWith('cat_starters') || d.id.startsWith('cat_mains') || d.id.startsWith('cat_pizzas') || d.id.startsWith('cat_drinks') || d.id.startsWith('cat_desserts')) {
+          await deleteDoc(d.ref);
+        }
+      }
+    } catch {}
+
+    try {
+      const itemSnap = await getDocs(collection(firestore, 'items'));
+      for (const d of itemSnap.docs) {
+        const data = d.data();
+        if (data.businessId?.startsWith('biz_demo_')) {
+          await deleteDoc(d.ref);
+        }
+      }
+    } catch {}
+
+    try {
+      const ordSnap = await getDocs(collection(firestore, 'orders'));
+      for (const d of ordSnap.docs) {
+        const data = d.data();
+        if (data.businessId?.startsWith('biz_demo_') || ['ord_101', 'ord_102', 'ord_103', 'ord_104'].includes(d.id)) {
+          await deleteDoc(d.ref);
+        }
+      }
+    } catch {}
+
+    console.log('[Firestore] Live Firestore cleaned of dummy demo fixtures.');
+  } catch (err) {
+    console.warn('[Firestore] Dummy data cleanup warning:', err);
+  }
+}
+
+// Ensure platform subscription plans exist, and clean up any dummy documents
 export async function ensureFirestoreSeeded(): Promise<void> {
   if (!firestore || isSeeded || isSeeding) return;
   isSeeding = true;
   try {
-    const bizSnap = await getDocs(collection(firestore, 'businesses'));
-    if (bizSnap.empty) {
-      console.log('[Firestore] Seeding initial data into Firestore...');
-      // Seed Businesses
-      for (const b of DEFAULT_BUSINESSES) {
-        await setDoc(doc(firestore, 'businesses', b.id), b);
-      }
-      // Seed Outlets
-      for (const o of DEFAULT_OUTLETS) {
-        await setDoc(doc(firestore, 'outlets', o.id), o);
-      }
-      // Seed Categories
-      for (const c of DEFAULT_CATEGORIES) {
-        await setDoc(doc(firestore, 'categories', c.id), c);
-      }
-      // Seed Items
-      for (const item of DEFAULT_ITEMS) {
-        await setDoc(doc(firestore, 'items', item.id), item);
-      }
-      // Seed Orders
-      for (const ord of DEFAULT_ORDERS) {
-        await setDoc(doc(firestore, 'orders', ord.id), ord);
-      }
-      // Seed Plans
+    // Only seed standard platform plans if empty (SaaS pricing tiers)
+    const planSnap = await getDocs(collection(firestore, 'plans'));
+    if (planSnap.empty) {
+      console.log('[Firestore] Initializing platform plans...');
       for (const p of DEFAULT_PLANS) {
         await setDoc(doc(firestore, 'plans', p.id), p);
       }
-      // Seed Team
-      for (const t of DEFAULT_TEAM) {
-        await setDoc(doc(firestore, 'team', t.id), t);
-      }
-      console.log('[Firestore] Initial seed completed successfully!');
     }
+
+    // Clean up any dummy records from Firestore
+    await cleanupDummyDataFromFirestore();
+
     isSeeded = true;
   } catch (err) {
-    console.warn('[Firestore] Auto-seed check failed (may be read-only rules or offline):', err);
+    console.warn('[Firestore] Initialization check failed:', err);
   } finally {
     isSeeding = false;
   }
@@ -374,15 +235,16 @@ function resolveUser(token?: string | null) {
       const rawUser = localStorage.getItem('tablewave_auth_user');
       if (rawUser) {
         const u = JSON.parse(rawUser);
+        const userIsSuper = Boolean(u.isSuperAdmin || u.role === 'super_admin');
         return {
-          id: u.id || 'usr_mock',
+          id: u.id || 'usr_current',
           email: u.email || 'user@tablewave.com',
-          name: u.name || 'Demo User',
-          role: u.role || 'business_admin',
+          name: u.name || (userIsSuper ? 'Super Admin' : 'Venue Owner'),
+          role: userIsSuper ? 'super_admin' : (u.role || 'business_admin'),
           status: 'active',
-          businessId: u.role === 'super_admin' ? null : (u.businessId || 'biz_demo_juniper'),
-          businessName: u.role === 'super_admin' ? 'Platform' : (u.businessName || 'The Juniper Room'),
-          isSuperAdmin: Boolean(u.isSuperAdmin || u.role === 'super_admin'),
+          businessId: userIsSuper ? null : (u.businessId || null),
+          businessName: userIsSuper ? 'Platform' : (u.businessName || null),
+          isSuperAdmin: userIsSuper,
         };
       }
     } catch {
@@ -400,13 +262,13 @@ function resolveUser(token?: string | null) {
   }
 
   return {
-    id: role === 'super_admin' ? 'usr_mock_superadmin' : role === 'staff' ? 'usr_mock_staff' : 'usr_mock_bizadmin',
-    email: role === 'super_admin' ? 'admin@tablewave.com' : role === 'staff' ? 'kitchen@juniperroom.com' : 'manager@juniperroom.com',
-    name: role === 'super_admin' ? 'Abhishek Kumar (Super Admin)' : role === 'staff' ? 'Marco Vance (Kitchen Staff)' : 'Elena Rossi (Venue Admin)',
+    id: role === 'super_admin' ? 'usr_superadmin' : role === 'staff' ? 'usr_staff' : 'usr_bizadmin',
+    email: role === 'super_admin' ? 'admin@tablewave.com' : 'user@tablewave.com',
+    name: role === 'super_admin' ? 'Super Admin' : 'Venue Owner',
     role,
     status: 'active',
-    businessId: isSuperAdmin ? null : 'biz_demo_juniper',
-    businessName: isSuperAdmin ? 'Platform' : 'The Juniper Room',
+    businessId: isSuperAdmin ? null : null,
+    businessName: isSuperAdmin ? 'Platform' : 'Venue',
     isSuperAdmin,
   };
 }
@@ -418,12 +280,18 @@ export async function handleFirestoreApi(
   body?: any,
   token?: string | null
 ): Promise<any> {
+  // If user is authenticated as a demo user (1-Click Demo), bypass Firestore and let the
+  // in-memory client mock handler serve the rich demo experience
+  if (token && (token.startsWith('mock-') || token.startsWith('mock:'))) {
+    return undefined;
+  }
+
   if (!firestore) return undefined;
 
   const cleanUrl = url.split('?')[0].replace(/\/+$/, '');
   const user = resolveUser(token);
 
-  // Trigger non-blocking seed check
+  // Trigger non-blocking initialization & dummy cleanup check
   void ensureFirestoreSeeded();
 
   try {
@@ -437,12 +305,38 @@ export async function handleFirestoreApi(
       const bizSnap = await getDocs(collection(firestore, 'businesses'));
       const ordSnap = await getDocs(collection(firestore, 'orders'));
 
-      const businesses = bizSnap.docs.map((d) => d.data() as FirestoreBusiness);
-      const allOrders = ordSnap.docs.map((d) => d.data() as FirestoreOrder);
+      const businesses = bizSnap.docs
+        .map((d) => d.data() as FirestoreBusiness)
+        .filter((b) => !b.id.startsWith('biz_demo_'));
+
+      const allOrders = ordSnap.docs
+        .map((d) => d.data() as FirestoreOrder)
+        .filter((o) => !o.id.startsWith('ord_10') && !o.businessId.startsWith('biz_demo_'));
 
       const scopedOrders = user.isSuperAdmin
         ? allOrders
-        : allOrders.filter((o) => o.businessId === (user.businessId || 'biz_demo_juniper'));
+        : user.businessId
+        ? allOrders.filter((o) => o.businessId === user.businessId)
+        : [];
+
+      // Calculate dynamic 7-day trend from genuine orders
+      const now = new Date();
+      const orderTrend: { label: string; orders: number; revenue: number }[] = [];
+      const dayNames = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+      for (let i = 6; i >= 0; i--) {
+        const d = new Date(now.getTime() - i * 86400000);
+        const dayStart = new Date(d.getFullYear(), d.getMonth(), d.getDate()).getTime();
+        const dayEnd = dayStart + 86400000;
+        const dayOrders = scopedOrders.filter((o) => {
+          const t = new Date(o.createdAt).getTime();
+          return t >= dayStart && t < dayEnd;
+        });
+        orderTrend.push({
+          label: dayNames[d.getDay()],
+          orders: dayOrders.length,
+          revenue: dayOrders.reduce((sum, o) => sum + (o.total || 0), 0),
+        });
+      }
 
       return {
         businessCount: businesses.length,
@@ -451,15 +345,7 @@ export async function handleFirestoreApi(
         revenue: scopedOrders.reduce((sum, o) => sum + (o.total || 0), 0),
         pendingOrderCount: scopedOrders.filter((o) => o.status === 'new' || o.status === 'preparing').length,
         recentOrders: scopedOrders.slice(0, 8),
-        orderTrend: [
-          { label: 'Mon', orders: 12, revenue: 340 },
-          { label: 'Tue', orders: 18, revenue: 520 },
-          { label: 'Wed', orders: 24, revenue: 680 },
-          { label: 'Thu', orders: 32, revenue: 890 },
-          { label: 'Fri', orders: 48, revenue: 1420 },
-          { label: 'Sat', orders: 62, revenue: 1840 },
-          { label: 'Sun', orders: 44, revenue: 1290 },
-        ],
+        orderTrend,
       };
     }
 
@@ -467,20 +353,25 @@ export async function handleFirestoreApi(
     if (cleanUrl === '/api/businesses') {
       if (method === 'GET') {
         const snap = await getDocs(collection(firestore, 'businesses'));
-        const list = snap.docs.map((d) => d.data() as FirestoreBusiness);
+        const list = snap.docs
+          .map((d) => d.data() as FirestoreBusiness)
+          .filter((b) => !b.id.startsWith('biz_demo_'));
+
         if (user.isSuperAdmin) return list;
-        const myBiz = list.filter((b) => b.id === user.businessId);
-        return myBiz.length ? myBiz : list.slice(0, 1);
+        if (user.businessId) {
+          return list.filter((b) => b.id === user.businessId);
+        }
+        return list.filter((b) => b.ownerEmail === user.email);
       }
       if (method === 'POST') {
         const id = `biz_${Date.now().toString().slice(-6)}`;
         const newBiz: FirestoreBusiness = {
           id,
           name: body?.name || 'New Venue',
-          slug: (body?.name || 'venue').toLowerCase().replace(/[^a-z0-9]+/g, '-'),
+          slug: (body?.name || 'venue').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '') || 'venue',
           type: body?.type || 'Restaurant',
           status: 'active',
-          ownerEmail: body?.ownerEmail || 'owner@venue.com',
+          ownerEmail: body?.ownerEmail || user.email || 'owner@venue.com',
           planId: body?.planId || 'plan_growth',
           planName: 'Growth',
           outletCount: 1,
@@ -505,7 +396,8 @@ export async function handleFirestoreApi(
     if (cleanUrl === '/api/plans') {
       if (method === 'GET') {
         const snap = await getDocs(collection(firestore, 'plans'));
-        return snap.docs.map((d) => d.data() as FirestorePlan);
+        const plans = snap.docs.map((d) => d.data() as FirestorePlan);
+        return plans.length ? plans : DEFAULT_PLANS;
       }
       if (method === 'POST') {
         const id = `plan_${Date.now().toString().slice(-6)}`;
@@ -527,7 +419,12 @@ export async function handleFirestoreApi(
     // 5. /api/team
     if (cleanUrl === '/api/team' && method === 'GET') {
       const snap = await getDocs(collection(firestore, 'team'));
-      return snap.docs.map((d) => d.data() as FirestoreTeamMember);
+      const list = snap.docs
+        .map((d) => d.data() as FirestoreTeamMember)
+        .filter((t) => !t.id.startsWith('usr_mock_'));
+
+      if (user.isSuperAdmin) return list;
+      return user.businessId ? list.filter((t) => t.businessId === user.businessId) : [];
     }
     if (cleanUrl === '/api/team/invite' && method === 'POST') {
       const id = `usr_inv_${Date.now().toString().slice(-6)}`;
@@ -537,8 +434,8 @@ export async function handleFirestoreApi(
         name: body?.email?.split('@')[0] || 'Invited Teammate',
         role: body?.role || 'staff',
         status: 'invited',
-        businessId: user.businessId || 'biz_demo_juniper',
-        businessName: user.businessName || 'The Juniper Room',
+        businessId: user.businessId || null,
+        businessName: user.businessName || 'Venue',
         createdAt: new Date().toISOString(),
       };
       await setDoc(doc(firestore, 'team', id), newMember);
@@ -549,17 +446,20 @@ export async function handleFirestoreApi(
     if (cleanUrl === '/api/outlets') {
       if (method === 'GET') {
         const snap = await getDocs(collection(firestore, 'outlets'));
-        const list = snap.docs.map((d) => d.data() as FirestoreOutlet);
-        const bizId = user.businessId || 'biz_demo_juniper';
-        return user.isSuperAdmin ? list : list.filter((o) => o.businessId === bizId);
+        const list = snap.docs
+          .map((d) => d.data() as FirestoreOutlet)
+          .filter((o) => !o.businessId.startsWith('biz_demo_') && !o.id.startsWith('out_juniper_'));
+
+        if (user.isSuperAdmin) return list;
+        return user.businessId ? list.filter((o) => o.businessId === user.businessId) : [];
       }
       if (method === 'POST') {
         const id = `out_${Date.now().toString().slice(-6)}`;
         const newOutlet: FirestoreOutlet = {
           id,
-          businessId: user.businessId || 'biz_demo_juniper',
+          businessId: user.businessId || 'biz_main',
           name: body?.name || 'Main Outlet',
-          slug: (body?.name || 'outlet').toLowerCase().replace(/[^a-z0-9]+/g, '-'),
+          slug: (body?.name || 'outlet').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '') || 'outlet',
           address: body?.address || '123 Main St',
           active: true,
           tableCount: Number(body?.tableCount) || 12,
@@ -588,15 +488,18 @@ export async function handleFirestoreApi(
     if (cleanUrl === '/api/categories') {
       if (method === 'GET') {
         const snap = await getDocs(collection(firestore, 'categories'));
-        const list = snap.docs.map((d) => d.data() as FirestoreCategory);
-        const bizId = user.businessId || 'biz_demo_juniper';
-        return user.isSuperAdmin ? list : list.filter((c) => c.businessId === bizId);
+        const list = snap.docs
+          .map((d) => d.data() as FirestoreCategory)
+          .filter((c) => !c.businessId.startsWith('biz_demo_'));
+
+        if (user.isSuperAdmin) return list;
+        return user.businessId ? list.filter((c) => c.businessId === user.businessId) : [];
       }
       if (method === 'POST') {
         const id = `cat_${Date.now().toString().slice(-6)}`;
         const newCat: FirestoreCategory = {
           id,
-          businessId: user.businessId || 'biz_demo_juniper',
+          businessId: user.businessId || 'biz_main',
           name: body?.name || 'General',
           sortOrder: Number(body?.sortOrder) || 1,
           createdAt: new Date().toISOString(),
@@ -624,16 +527,19 @@ export async function handleFirestoreApi(
     if (cleanUrl === '/api/items') {
       if (method === 'GET') {
         const snap = await getDocs(collection(firestore, 'items'));
-        const list = snap.docs.map((d) => d.data() as FirestoreItem);
-        const bizId = user.businessId || 'biz_demo_juniper';
-        return user.isSuperAdmin ? list : list.filter((i) => i.businessId === bizId);
+        const list = snap.docs
+          .map((d) => d.data() as FirestoreItem)
+          .filter((i) => !i.businessId.startsWith('biz_demo_'));
+
+        if (user.isSuperAdmin) return list;
+        return user.businessId ? list.filter((i) => i.businessId === user.businessId) : [];
       }
       if (method === 'POST') {
         const id = `item_${Date.now().toString().slice(-6)}`;
         const newItem: FirestoreItem = {
           id,
-          businessId: user.businessId || 'biz_demo_juniper',
-          categoryId: body?.categoryId || 'cat_starters',
+          businessId: user.businessId || 'biz_main',
+          categoryId: body?.categoryId || 'cat_main',
           name: body?.name || 'New Item',
           description: body?.description || '',
           price: Number(body?.price) || 14,
@@ -665,9 +571,12 @@ export async function handleFirestoreApi(
     // 9. /api/orders
     if (cleanUrl === '/api/orders' && method === 'GET') {
       const snap = await getDocs(collection(firestore, 'orders'));
-      const list = snap.docs.map((d) => d.data() as FirestoreOrder);
-      const bizId = user.businessId || 'biz_demo_juniper';
-      return user.isSuperAdmin ? list : list.filter((o) => o.businessId === bizId);
+      const list = snap.docs
+        .map((d) => d.data() as FirestoreOrder)
+        .filter((o) => !o.id.startsWith('ord_10') && !o.businessId.startsWith('biz_demo_'));
+
+      if (user.isSuperAdmin) return list;
+      return user.businessId ? list.filter((o) => o.businessId === user.businessId) : [];
     }
 
     const orderMatch = cleanUrl.match(/^\/api\/orders\/([^/]+)$/);
@@ -683,32 +592,62 @@ export async function handleFirestoreApi(
     // 10. /api/analytics
     if (cleanUrl === '/api/analytics' && method === 'GET') {
       const snap = await getDocs(collection(firestore, 'orders'));
-      const orders = snap.docs.map((d) => d.data() as FirestoreOrder);
+      const allOrders = snap.docs
+        .map((d) => d.data() as FirestoreOrder)
+        .filter((o) => !o.id.startsWith('ord_10') && !o.businessId.startsWith('biz_demo_'));
+
+      const scopedOrders = user.isSuperAdmin
+        ? allOrders
+        : user.businessId
+        ? allOrders.filter((o) => o.businessId === user.businessId)
+        : [];
+
+      const totalRevenue = scopedOrders.reduce((sum, o) => sum + (o.total || 0), 0);
+
+      // Dynamic 7-day trend
+      const now = new Date();
+      const trend: { label: string; orders: number; revenue: number }[] = [];
+      const dayNames = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+      for (let i = 6; i >= 0; i--) {
+        const d = new Date(now.getTime() - i * 86400000);
+        const dayStart = new Date(d.getFullYear(), d.getMonth(), d.getDate()).getTime();
+        const dayEnd = dayStart + 86400000;
+        const dayOrders = scopedOrders.filter((o) => {
+          const t = new Date(o.createdAt).getTime();
+          return t >= dayStart && t < dayEnd;
+        });
+        trend.push({
+          label: dayNames[d.getDay()],
+          orders: dayOrders.length,
+          revenue: dayOrders.reduce((sum, o) => sum + (o.total || 0), 0),
+        });
+      }
+
+      // Dynamic top items aggregation from genuine orders
+      const itemMap = new Map<string, { name: string; quantity: number; revenue: number }>();
+      for (const order of scopedOrders) {
+        for (const it of order.items || []) {
+          const key = it.itemId || it.name;
+          const existing = itemMap.get(key) || { name: it.name, quantity: 0, revenue: 0 };
+          existing.quantity += it.quantity || 1;
+          existing.revenue += (it.unitPrice || 0) * (it.quantity || 1);
+          itemMap.set(key, existing);
+        }
+      }
+      const topItems = Array.from(itemMap.values())
+        .sort((a, b) => b.quantity - a.quantity)
+        .slice(0, 5);
+
       return {
-        orderCount: orders.length,
-        revenue: orders.reduce((sum, o) => sum + (o.total || 0), 0),
-        averageOrder: orders.length ? +(orders.reduce((sum, o) => sum + o.total, 0) / orders.length).toFixed(1) : 0,
-        completedCount: orders.filter((o) => o.status === 'completed').length,
-        trend: [
-          { label: 'Mon', orders: 12, revenue: 340 },
-          { label: 'Tue', orders: 18, revenue: 520 },
-          { label: 'Wed', orders: 24, revenue: 680 },
-          { label: 'Thu', orders: 32, revenue: 890 },
-          { label: 'Fri', orders: 48, revenue: 1420 },
-          { label: 'Sat', orders: 62, revenue: 1840 },
-          { label: 'Sun', orders: 44, revenue: 1290 },
-        ],
-        topItems: [
-          { name: 'Dry-Aged Ribeye Steak (280g)', quantity: 46, revenue: 1656 },
-          { name: 'Margherita D.O.P.', quantity: 38, revenue: 684 },
-          { name: 'Smoked Rosemary Old Fashioned', quantity: 34, revenue: 544 },
-          { name: 'Truffle & Wild Mushroom Arancini', quantity: 29, revenue: 406 },
-          { name: 'Traditional Venetian Tiramisù', quantity: 22, revenue: 242 },
-        ],
+        orderCount: scopedOrders.length,
+        revenue: totalRevenue,
+        averageOrder: scopedOrders.length ? +(totalRevenue / scopedOrders.length).toFixed(1) : 0,
+        completedCount: scopedOrders.filter((o) => o.status === 'completed').length,
+        trend,
+        topItems,
       };
     }
 
-    // 11. /api/store/:business/:outlet/:table
     // 11. /api/store/:business/:outlet/:table
     const storeMenuMatch = cleanUrl.match(/^\/api\/store\/([^/]+)\/([^/]+)\/([^/]+)$/);
     if (storeMenuMatch && method === 'GET') {
@@ -721,23 +660,38 @@ export async function handleFirestoreApi(
       const catSnap = await getDocs(collection(firestore, 'categories'));
       const itemSnap = await getDocs(collection(firestore, 'items'));
 
-      const allBiz = bizSnap.docs.map((d) => d.data() as FirestoreBusiness);
-      const allOut = outSnap.docs.map((d) => d.data() as FirestoreOutlet);
-      const allCat = catSnap.docs.map((d) => d.data() as FirestoreCategory);
-      const allItems = itemSnap.docs.map((d) => d.data() as FirestoreItem);
+      const allBiz = bizSnap.docs
+        .map((d) => d.data() as FirestoreBusiness)
+        .filter((b) => !b.id.startsWith('biz_demo_'));
+      const allOut = outSnap.docs
+        .map((d) => d.data() as FirestoreOutlet)
+        .filter((o) => !o.businessId.startsWith('biz_demo_'));
+      const allCat = catSnap.docs
+        .map((d) => d.data() as FirestoreCategory)
+        .filter((c) => !c.businessId.startsWith('biz_demo_'));
+      const allItems = itemSnap.docs
+        .map((d) => d.data() as FirestoreItem)
+        .filter((i) => !i.businessId.startsWith('biz_demo_'));
 
       // Find the specific target business requested
-      const targetBiz =
-        allBiz.find((b) => b.slug === bParam || b.id === bParam) ||
-        allBiz[0] ||
-        DEFAULT_BUSINESSES[0];
+      const targetBiz = allBiz.find((b) => b.slug === bParam || b.id === bParam) || allBiz[0];
+
+      if (!targetBiz) {
+        return {
+          business: { id: 'empty', name: 'Venue', slug: bParam, status: 'active', outletCount: 0, orderCount: 0 },
+          outlet: { id: 'empty', name: 'Main', slug: oParam, address: '', tableCount: 1, active: true },
+          tableNumber: table,
+          categories: [],
+          items: [],
+        };
+      }
 
       // Find the specific target outlet for that business
       const targetOutlet =
         allOut.find((o) => (o.slug === oParam || o.id === oParam) && o.businessId === targetBiz.id) ||
         allOut.find((o) => o.businessId === targetBiz.id) ||
         allOut[0] ||
-        DEFAULT_OUTLETS[0];
+        { id: `out_${targetBiz.id}_1`, name: 'Main Room', slug: 'main', address: '', tableCount: 10, active: true, createdAt: new Date().toISOString() };
 
       // Filter categories and items strictly to this venue
       const categories = allCat.filter((c) => c.businessId === targetBiz.id);
@@ -795,19 +749,21 @@ export async function handleFirestoreApi(
     if (cleanUrl === '/api/store/order' && method === 'POST') {
       const bizSnap = await getDocs(collection(firestore, 'businesses'));
       const outSnap = await getDocs(collection(firestore, 'outlets'));
-      const allBiz = bizSnap.docs.map((d) => d.data() as FirestoreBusiness);
-      const allOut = outSnap.docs.map((d) => d.data() as FirestoreOutlet);
+      const allBiz = bizSnap.docs
+        .map((d) => d.data() as FirestoreBusiness)
+        .filter((b) => !b.id.startsWith('biz_demo_'));
+      const allOut = outSnap.docs
+        .map((d) => d.data() as FirestoreOutlet)
+        .filter((o) => !o.businessId.startsWith('biz_demo_'));
 
       const targetBiz =
         allBiz.find((b) => b.slug === body?.businessSlug || b.id === body?.businessSlug) ||
-        allBiz[0] ||
-        DEFAULT_BUSINESSES[0];
+        allBiz[0];
 
       const targetOutlet =
-        allOut.find((o) => (o.slug === body?.outletSlug || o.id === body?.outletSlug) && o.businessId === targetBiz.id) ||
-        allOut.find((o) => o.businessId === targetBiz.id) ||
-        allOut[0] ||
-        DEFAULT_OUTLETS[0];
+        allOut.find((o) => (o.slug === body?.outletSlug || o.id === body?.outletSlug) && o.businessId === targetBiz?.id) ||
+        allOut.find((o) => o.businessId === targetBiz?.id) ||
+        allOut[0];
 
       const total = (body?.items || []).reduce(
         (sum: number, item: any) => sum + (item.unitPrice || 0) * (item.quantity || 1),
@@ -816,10 +772,10 @@ export async function handleFirestoreApi(
       const id = `ord_${Date.now().toString().slice(-6)}`;
       const newOrder: FirestoreOrder = {
         id,
-        businessId: targetBiz.id,
-        outletId: targetOutlet.id,
-        businessName: targetBiz.name,
-        outletName: targetOutlet.name,
+        businessId: targetBiz ? targetBiz.id : 'biz_main',
+        outletId: targetOutlet ? targetOutlet.id : 'out_main',
+        businessName: targetBiz ? targetBiz.name : 'Restaurant',
+        outletName: targetOutlet ? targetOutlet.name : 'Dining Room',
         tableNumber: body?.tableNumber || '1',
         customerName: body?.customerName || 'Guest',
         customerPhone: body?.customerPhone,

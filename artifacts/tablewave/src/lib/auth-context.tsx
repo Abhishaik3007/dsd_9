@@ -69,7 +69,15 @@ export function TablewaveAuthProvider({ children }: { children: ReactNode }) {
     const raw = localStorage.getItem(USER_KEY);
     if (!raw) return null;
     try {
-      return JSON.parse(raw);
+      const u = JSON.parse(raw);
+      if (u.role === 'super_admin' || u.isSuperAdmin) {
+        u.role = 'super_admin';
+        u.isSuperAdmin = true;
+        u.businessId = null;
+        u.businessName = 'Platform';
+        try { localStorage.setItem(USER_KEY, JSON.stringify(u)); } catch {}
+      }
+      return u;
     } catch {
       return null;
     }
