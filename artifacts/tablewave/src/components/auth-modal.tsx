@@ -24,6 +24,7 @@ export function AuthCard({
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [name, setName] = useState('');
+  const [venueName, setVenueName] = useState('');
   const [role, setRole] = useState<'super_admin' | 'business_admin' | 'staff'>('business_admin');
   
   const [loading, setLoading] = useState(false);
@@ -55,7 +56,7 @@ export function AuthCard({
       if (emailMode === 'signin') {
         await loginWithEmail(email, password);
       } else {
-        await registerWithEmail(email, password, name, role);
+        await registerWithEmail(email, password, name, role, venueName);
       }
       if (onSuccess) onSuccess();
       else setLocation('/dashboard');
@@ -241,6 +242,22 @@ export function AuthCard({
                   </button>
                 </div>
               </div>
+
+              {role === 'business_admin' && (
+                <div>
+                  <label className="block text-[11px] font-semibold text-[#485c6c]">Restaurant / Venue Name</label>
+                  <div className="mt-1 flex items-center gap-2 rounded-xl border border-[#ded9cc] bg-white px-3 py-2">
+                    <Store size={16} className="text-[#96a4af]" />
+                    <input
+                      type="text"
+                      placeholder="e.g. The Golden Fork, Bella Cucina"
+                      value={venueName}
+                      onChange={(e) => setVenueName(e.target.value)}
+                      className="w-full text-[13px] bg-transparent outline-none text-[#203147]"
+                    />
+                  </div>
+                </div>
+              )}
             </>
           )}
 

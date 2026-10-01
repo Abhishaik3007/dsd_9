@@ -709,42 +709,63 @@ export async function handleFirestoreApi(
     }
 
     // 11. /api/store/:business/:outlet/:table
+    // 11. /api/store/:business/:outlet/:table
     const storeMenuMatch = cleanUrl.match(/^\/api\/store\/([^/]+)\/([^/]+)\/([^/]+)$/);
     if (storeMenuMatch && method === 'GET') {
-      const table = storeMenuMatch[3];
+      const bParam = decodeURIComponent(storeMenuMatch[1]);
+      const oParam = decodeURIComponent(storeMenuMatch[2]);
+      const table = decodeURIComponent(storeMenuMatch[3]);
+
       const bizSnap = await getDocs(collection(firestore, 'businesses'));
       const outSnap = await getDocs(collection(firestore, 'outlets'));
       const catSnap = await getDocs(collection(firestore, 'categories'));
       const itemSnap = await getDocs(collection(firestore, 'items'));
 
-      const biz = bizSnap.docs[0]?.data() as FirestoreBusiness || DEFAULT_BUSINESSES[0];
-      const outlet = outSnap.docs[0]?.data() as FirestoreOutlet || DEFAULT_OUTLETS[0];
-      const categories = catSnap.docs.map((d) => d.data() as FirestoreCategory);
-      const items = itemSnap.docs.map((d) => d.data() as FirestoreItem);
+      const allBiz = bizSnap.docs.map((d) => d.data() as FirestoreBusiness);
+      const allOut = outSnap.docs.map((d) => d.data() as FirestoreOutlet);
+      const allCat = catSnap.docs.map((d) => d.data() as FirestoreCategory);
+      const allItems = itemSnap.docs.map((d) => d.data() as FirestoreItem);
+
+      // Find the specific target business requested
+      const targetBiz =
+        allBiz.find((b) => b.slug === bParam || b.id === bParam) ||
+        allBiz[0] ||
+        DEFAULT_BUSINESSES[0];
+
+      // Find the specific target outlet for that business
+      const targetOutlet =
+        allOut.find((o) => (o.slug === oParam || o.id === oParam) && o.businessId === targetBiz.id) ||
+        allOut.find((o) => o.businessId === targetBiz.id) ||
+        allOut[0] ||
+        DEFAULT_OUTLETS[0];
+
+      // Filter categories and items strictly to this venue
+      const categories = allCat.filter((c) => c.businessId === targetBiz.id);
+      const items = allItems.filter((i) => i.businessId === targetBiz.id);
 
       return {
         business: {
-          id: biz.id,
-          name: biz.name,
-          slug: biz.slug,
-          type: biz.type,
-          status: biz.status,
-          ownerEmail: biz.ownerEmail,
-          planId: biz.planId,
-          planName: biz.planName ?? null,
-          expiresAt: biz.expiresAt ?? null,
-          outletCount: biz.outletCount,
-          orderCount: biz.orderCount,
-          createdAt: biz.createdAt,
+          id: targetBiz.id,
+          name: targetBiz.name,
+          slug: targetBiz.slug,
+          type: targetBiz.type,
+          status: targetBiz.status,
+          ownerEmail: targetBiz.ownerEmail,
+          planId: targetBiz.planId,
+          planName: targetBiz.planName ?? null,
+          expiresAt: targetBiz.expiresAt ?? null,
+          outletCount: targetBiz.outletCount,
+          orderCount: targetBiz.orderCount,
+          createdAt: targetBiz.createdAt,
         },
         outlet: {
-          id: outlet.id,
-          name: outlet.name,
-          slug: outlet.slug,
-          address: outlet.address,
-          tableCount: outlet.tableCount,
-          active: outlet.active,
-          createdAt: outlet.createdAt,
+          id: targetOutlet.id,
+          name: targetOutlet.name,
+          slug: targetOutlet.slug,
+          address: targetOutlet.address,
+          tableCount: targetOutlet.tableCount,
+          active: targetOutlet.active,
+          createdAt: targetOutlet.createdAt,
         },
         tableNumber: table,
         categories: categories.map((c) => ({
@@ -772,14 +793,33 @@ export async function handleFirestoreApi(
 
     // 12. /api/store/order
     if (cleanUrl === '/api/store/order' && method === 'POST') {
-      const total = (body?.items || []).reduce((sum: number, item: any) => sum + (item.unitPrice || 0) * (item.quantity || 1), 0);
+      const bizSnap = await getDocs(collection(firestore, 'businesses'));
+      const outSnap = await getDocs(collection(firestore, 'outlets'));
+      const allBiz = bizSnap.docs.map((d) => d.data() as FirestoreBusiness);
+      const allOut = outSnap.docs.map((d) => d.data() as FirestoreOutlet);
+
+      const targetBiz =
+        allBiz.find((b) => b.slug === body?.businessSlug || b.id === body?.businessSlug) ||
+        allBiz[0] ||
+        DEFAULT_BUSINESSES[0];
+
+      const targetOutlet =
+        allOut.find((o) => (o.slug === body?.outletSlug || o.id === body?.outletSlug) && o.businessId === targetBiz.id) ||
+        allOut.find((o) => o.businessId === targetBiz.id) ||
+        allOut[0] ||
+        DEFAULT_OUTLETS[0];
+
+      const total = (body?.items || []).reduce(
+        (sum: number, item: any) => sum + (item.unitPrice || 0) * (item.quantity || 1),
+        0
+      );
       const id = `ord_${Date.now().toString().slice(-6)}`;
       const newOrder: FirestoreOrder = {
         id,
-        businessId: 'biz_demo_juniper',
-        outletId: 'out_juniper_dt',
-        businessName: 'The Juniper Room',
-        outletName: 'Downtown Dining Room',
+        businessId: targetBiz.id,
+        outletId: targetOutlet.id,
+        businessName: targetBiz.name,
+        outletName: targetOutlet.name,
         tableNumber: body?.tableNumber || '1',
         customerName: body?.customerName || 'Guest',
         customerPhone: body?.customerPhone,
