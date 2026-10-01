@@ -1,6 +1,7 @@
 import React, { createContext, useContext, useEffect, useState, useMemo, type ReactNode } from 'react';
-import { setAuthTokenGetter } from '@workspace/api-client-react';
-import { isFirebaseConfigured, loginWithFirebaseAuth, loginWithFirebaseGoogle } from './firebase';
+import { setAuthTokenGetter, setCustomApiHandler } from '@workspace/api-client-react';
+import { isFirebaseConfigured, loginWithFirebaseAuth, loginWithFirebaseGoogle, firestore } from './firebase';
+import { handleFirestoreApi, ensureFirestoreSeeded } from './firestore-service';
 
 export interface AuthUser {
   id: string;
@@ -46,6 +47,14 @@ const MODE_KEY = 'tablewave_auth_mode';
 setAuthTokenGetter(() => {
   return localStorage.getItem(TOKEN_KEY);
 });
+
+// Register dynamic Firestore database handler for live real-time cloud data
+setCustomApiHandler(handleFirestoreApi);
+
+// Eagerly verify and ensure Firestore collections are initialized
+if (typeof window !== 'undefined') {
+  void ensureFirestoreSeeded();
+}
 
 export function TablewaveAuthProvider({ children }: { children: ReactNode }) {
   const [token, setToken] = useState<string | null>(() => localStorage.getItem(TOKEN_KEY));

@@ -20,6 +20,19 @@ const DEFAULT_JSON_ACCEPT = "application/json, application/problem+json";
 let _baseUrl: string | null = null;
 let _authTokenGetter: AuthTokenGetter | null = null;
 
+export type CustomApiHandler = (
+  url: string,
+  method: string,
+  body?: any,
+  token?: string | null
+) => Promise<any> | any;
+
+let _customApiHandler: CustomApiHandler | null = null;
+
+export function setCustomApiHandler(handler: CustomApiHandler | null): void {
+  _customApiHandler = handler;
+}
+
 /**
  * Set a base URL that is prepended to every relative request URL
  * (i.e. paths that start with `/`).
@@ -364,7 +377,25 @@ export async function customFetch<T = unknown>(
   const requestInfo = { method, url: resolveUrl(input) };
   const isApiReq = requestInfo.url.includes("/api/") || requestInfo.url.startsWith("/api/");
 
-  // If user is authenticated as a demo user (mock token), serve directly via client mock data for maximum speed & stability
+  // 1. If a custom dynamic API handler (such as Firestore) is registered, route request through it first
+  if (isApiReq && _customApiHandler) {
+    try {
+      let parsedBody: any;
+      if (typeof init.body === "string") {
+        try { parsedBody = JSON.parse(init.body); } catch { parsedBody = init.body; }
+      } else {
+        parsedBody = init.body;
+      }
+      const handlerRes = await _customApiHandler(requestInfo.url, method, parsedBody, token);
+      if (handlerRes !== undefined) {
+        return handlerRes as T;
+      }
+    } catch (err) {
+      console.warn("[Firestore / CustomApiHandler Warning]:", err);
+    }
+  }
+
+  // If user is authenticated as a demo user (mock token) and no custom handler resolved, serve directly via client mock data
   if (isApiReq && token && (token.startsWith("mock-") || token.startsWith("mock:"))) {
     let parsedBody: any;
     if (typeof init.body === "string") {
