@@ -1,3 +1,5 @@
+import { handleClientMockRequest } from "./mock-handler";
+
 export type CustomFetchOptions = RequestInit & {
   responseType?: "json" | "text" | "blob" | "auto";
 };
@@ -351,16 +353,64 @@ export async function customFetch<T = unknown>(
 
   // Attach bearer token when an auth getter is configured and no
   // Authorization header has been explicitly provided.
-  if (_authTokenGetter && !headers.has("authorization")) {
-    const token = await _authTokenGetter();
-    if (token) {
+  let token: string | null = null;
+  if (_authTokenGetter) {
+    token = await _authTokenGetter();
+    if (token && !headers.has("authorization")) {
       headers.set("authorization", `Bearer ${token}`);
     }
   }
 
   const requestInfo = { method, url: resolveUrl(input) };
+  const isApiReq = requestInfo.url.includes("/api/") || requestInfo.url.startsWith("/api/");
 
-  const response = await fetch(input, { ...init, method, headers });
+  // If user is authenticated as a demo user (mock token), serve directly via client mock data for maximum speed & stability
+  if (isApiReq && token && (token.startsWith("mock-") || token.startsWith("mock:"))) {
+    let parsedBody: any;
+    if (typeof init.body === "string") {
+      try { parsedBody = JSON.parse(init.body); } catch { parsedBody = init.body; }
+    } else {
+      parsedBody = init.body;
+    }
+    const mockRes = handleClientMockRequest(requestInfo.url, method, parsedBody, token);
+    if (mockRes !== undefined) {
+      return mockRes as T;
+    }
+  }
+
+  let response: Response;
+  try {
+    response = await fetch(input, { ...init, method, headers });
+  } catch (err) {
+    if (isApiReq) {
+      let parsedBody: any;
+      if (typeof init.body === "string") {
+        try { parsedBody = JSON.parse(init.body); } catch { parsedBody = init.body; }
+      } else {
+        parsedBody = init.body;
+      }
+      const mockRes = handleClientMockRequest(requestInfo.url, method, parsedBody, token);
+      if (mockRes !== undefined) {
+        return mockRes as T;
+      }
+    }
+    throw err;
+  }
+
+  // Check if response is HTML (which happens when static hosting like Vercel rewrites /api/* to /index.html)
+  const contentType = response.headers.get("content-type") || "";
+  if (isApiReq && (contentType.includes("text/html") || response.status === 404)) {
+    let parsedBody: any;
+    if (typeof init.body === "string") {
+      try { parsedBody = JSON.parse(init.body); } catch { parsedBody = init.body; }
+    } else {
+      parsedBody = init.body;
+    }
+    const mockRes = handleClientMockRequest(requestInfo.url, method, parsedBody, token);
+    if (mockRes !== undefined) {
+      return mockRes as T;
+    }
+  }
 
   if (!response.ok) {
     const errorData = await parseErrorBody(response, method);
@@ -369,3 +419,4 @@ export async function customFetch<T = unknown>(
 
   return (await parseSuccessBody(response, responseType, requestInfo)) as T;
 }
+

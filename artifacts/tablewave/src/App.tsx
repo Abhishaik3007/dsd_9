@@ -6,7 +6,7 @@ import { Toaster } from '@/components/ui/toaster';
 import { TooltipProvider } from '@/components/ui/tooltip';
 import { BrandMark, Button } from '@/components/shared';
 import { getGetCurrentUserQueryKey, useGetCurrentUser } from '@workspace/api-client-react';
-import { TablewaveAuthProvider, useAuth, useClerk } from '@/lib/auth-context';
+import { TablewaveAuthProvider, useAuth, useClerk, useTablewaveAuth } from '@/lib/auth-context';
 import { AuthCard } from '@/components/auth-modal';
 import { LandingPage } from '@/pages/landing';
 import { Workspace } from '@/pages/workspace';
@@ -42,12 +42,12 @@ function QueryClientCacheInvalidator() {
 }
 
 function HomeRedirect() {
-  const { isLoaded, isSignedIn } = useAuth();
+  const { isLoaded, isSignedIn, user: authUser } = useTablewaveAuth();
   const current = useGetCurrentUser({
     query: { enabled: Boolean(isSignedIn), queryKey: getGetCurrentUserQueryKey() },
   });
   
-  if (!isLoaded || (isSignedIn && current.isLoading)) {
+  if (!isLoaded || (isSignedIn && current.isLoading && !authUser)) {
     return (
       <div className="min-h-[100dvh] bg-[#f7f6f0] p-6">
         <div className="skeleton mx-auto mt-8 h-[500px] max-w-5xl" />
@@ -57,7 +57,7 @@ function HomeRedirect() {
   
   if (!isSignedIn) return <LandingPage />;
   
-  if (current.isError) {
+  if (current.isError && !authUser) {
     return (
       <main className="flex min-h-[100dvh] flex-col items-center justify-center bg-[#f7f6f0] px-6 text-center">
         <BrandMark />
@@ -72,7 +72,10 @@ function HomeRedirect() {
     );
   }
   
-  const destination = current.data?.role === 'staff' ? '/orders' : '/dashboard';
+  const role = (current.data && typeof current.data === 'object' && 'role' in current.data)
+    ? current.data.role
+    : authUser?.role;
+  const destination = role === 'staff' ? '/orders' : '/dashboard';
   return <Redirect to={destination} />;
 }
 

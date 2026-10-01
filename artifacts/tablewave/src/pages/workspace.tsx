@@ -1,6 +1,6 @@
 import { type ComponentType, type FormEvent, type ReactNode, useMemo, useState } from 'react';
 import { Redirect, useLocation, Link } from 'wouter';
-import { useAuth } from '@/lib/auth-context';
+import { useAuth, useTablewaveAuth } from '@/lib/auth-context';
 import { useQueryClient } from '@tanstack/react-query';
 import {
   ArrowRight, ArrowUpRight, BarChart3, Check, CheckCircle2, ChevronDown,
@@ -1502,13 +1502,17 @@ export const ROLE_DEFAULT_ROUTE: Record<string, string> = {
 };
 
 export function Workspace() {
-  const { isLoaded, isSignedIn } = useAuth();
+  const { isLoaded, isSignedIn, user: authUser } = useTablewaveAuth();
   const [location] = useLocation();
   const client = useQueryClient();
   const route = location.split('/')[1] || 'dashboard';
   const enabled = Boolean(isSignedIn);
   const current = useGetCurrentUser({ query: { enabled, queryKey: getGetCurrentUserQueryKey() } });
-  const user = current.data;
+  
+  // Resilient resolution: prioritize valid current user data from API if it has valid fields,
+  // otherwise fallback to auth context user (demo / local session)
+  const isApiUserData = current.data && typeof current.data === 'object' && 'role' in current.data;
+  const user = (isApiUserData ? current.data : authUser) as CurrentUser | null;
   const userRole = user?.role;
   const isRoutePermitted = userRole ? (ROLE_ALLOWED_ROUTES[userRole] || []).includes(route) : false;
 
@@ -1576,8 +1580,8 @@ export function Workspace() {
 
   if (!isLoaded) return <div className="min-h-[100dvh] bg-[#f5f3ed] p-6"><div className="skeleton mx-auto h-12 max-w-4xl" /><div className="skeleton mx-auto mt-8 h-72 max-w-4xl" /></div>;
   if (!isSignedIn) return <Redirect to="/sign-in" />;
-  if (current.isLoading || !user) return <div className="min-h-[100dvh] bg-[#f5f3ed] p-6"><div className="skeleton mx-auto h-12 max-w-4xl" /><div className="skeleton mx-auto mt-8 h-72 max-w-4xl" /></div>;
-  if (current.isError) return <div className="mx-auto flex min-h-[100dvh] max-w-xl flex-col items-center justify-center px-6 text-center"><div className="font-display text-2xl font-bold">Workspace access is unavailable</div><p className="mt-2 text-sm text-[#77858d]">We couldn’t resolve your Tablewave account. Please try again.</p><Button onClick={() => void current.refetch()} className="mt-5">Try again</Button></div>;
+  if ((current.isLoading && !user) || !user) return <div className="min-h-[100dvh] bg-[#f5f3ed] p-6"><div className="skeleton mx-auto h-12 max-w-4xl" /><div className="skeleton mx-auto mt-8 h-72 max-w-4xl" /></div>;
+  if (current.isError && !user) return <div className="mx-auto flex min-h-[100dvh] max-w-xl flex-col items-center justify-center px-6 text-center"><div className="font-display text-2xl font-bold">Workspace access is unavailable</div><p className="mt-2 text-sm text-[#77858d]">We couldn’t resolve your Tablewave account. Please try again.</p><Button onClick={() => void current.refetch()} className="mt-5">Try again</Button></div>;
   if (user.status !== 'active') return <div className="mx-auto flex min-h-[100dvh] max-w-xl flex-col items-center justify-center px-6 text-center"><div className="font-display text-2xl font-bold">Your account is being set up</div><p className="mt-2 text-sm text-[#77858d]">An administrator will finish granting access shortly.</p></div>;
 
   if (!isRoutePermitted) {
