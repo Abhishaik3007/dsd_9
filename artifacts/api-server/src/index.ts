@@ -1,13 +1,23 @@
+import path from "node:path";
+import fs from "node:fs";
+
+// Load .env.local and .env from workspace root if present
+if (typeof process.loadEnvFile === "function") {
+  const rootDir = process.cwd();
+  const envLocalPath = path.join(rootDir, ".env.local");
+  const envPath = path.join(rootDir, ".env");
+  if (fs.existsSync(envLocalPath)) {
+    try { process.loadEnvFile(envLocalPath); } catch {}
+  }
+  if (fs.existsSync(envPath)) {
+    try { process.loadEnvFile(envPath); } catch {}
+  }
+}
+
 import app from "./app";
 import { logger } from "./lib/logger";
 
-const rawPort = process.env["PORT"];
-
-if (!rawPort) {
-  throw new Error(
-    "PORT environment variable is required but was not provided.",
-  );
-}
+const rawPort = process.env["PORT"] || "5000";
 
 const port = Number(rawPort);
 

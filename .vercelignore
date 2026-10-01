@@ -1,0 +1,6 @@
+.env*.local
+.agents
+.conversation
+node_modules
+*.tsbuildinfo
+.git

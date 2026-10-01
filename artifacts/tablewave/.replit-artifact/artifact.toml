@@ -1,0 +1,28 @@
+kind = "web"
+previewPath = "/"
+title = "Tablewave Ordering"
+description = "A multi-tenant QR ordering platform for restaurants, hotels, and cinemas, with business administration, digital menus, table QR codes, and real-time order management."
+version = "1.0.0"
+id = "artifacts/tablewave"
+router = "path"
+
+[[services]]
+name = "web"
+paths = [ "/" ]
+localPort = 24635
+
+[services.development]
+run = "pnpm --filter @workspace/tablewave run dev"
+
+[services.production]
+build = [ "pnpm", "--filter", "@workspace/tablewave", "run", "build" ]
+serve = "static"
+publicDir = "artifacts/tablewave/dist/public"
+
+[[services.production.rewrites]]
+from = "/*"
+to = "/index.html"
+
+[services.env]
+PORT = "24635"
+BASE_PATH = "/"
