@@ -210,36 +210,19 @@ export function TablewaveAuthProvider({ children }: { children: ReactNode }) {
 
     if (firestore) {
       try {
-        if (isSuper) {
-          const superAdminData = {
-            id: fallbackUser.id,
-            email: fallbackUser.email,
-            name: fallbackUser.name,
-            role: 'super_admin',
-            userType: 'super_admin',
-            isSuperAdmin: true,
-            status: 'active',
-            businessId: null,
-            businessName: 'Platform',
-            createdAt: new Date().toISOString(),
-          };
-          await setDoc(doc(firestore, 'super_admins', fallbackUser.id), superAdminData, { merge: true });
-          await setDoc(doc(firestore, 'team', fallbackUser.id), superAdminData, { merge: true });
-        } else {
-          const regularUserData = {
-            id: fallbackUser.id,
-            email: fallbackUser.email,
-            name: fallbackUser.name,
-            role: fallbackUser.role,
-            userType: fallbackUser.role,
-            isSuperAdmin: false,
-            status: 'active',
-            businessId: fallbackUser.businessId,
-            businessName: fallbackUser.businessName,
-            createdAt: new Date().toISOString(),
-          };
-          await setDoc(doc(firestore, 'users', fallbackUser.id), regularUserData, { merge: true });
-        }
+        const userData = {
+          id: fallbackUser.id,
+          email: fallbackUser.email,
+          name: fallbackUser.name,
+          role: fallbackUser.role,
+          userType: fallbackUser.role,
+          isSuperAdmin: isSuper,
+          status: 'active',
+          businessId: fallbackUser.businessId,
+          businessName: fallbackUser.businessName,
+          createdAt: new Date().toISOString(),
+        };
+        await setDoc(doc(firestore, 'users', fallbackUser.id), userData, { merge: true });
       } catch (err) {
         console.warn('[Firestore] Could not write user doc:', err);
       }

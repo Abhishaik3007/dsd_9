@@ -195,6 +195,13 @@ export async function cleanupDummyDataFromFirestore(): Promise<void> {
       }
     } catch {}
 
+    try {
+      const teamSnap = await getDocs(collection(firestore, 'team'));
+      for (const d of teamSnap.docs) {
+        await deleteDoc(d.ref);
+      }
+    } catch {}
+
     console.log('[Firestore] Live Firestore cleaned of dummy demo fixtures.');
   } catch (err) {
     console.warn('[Firestore] Dummy data cleanup warning:', err);
@@ -215,13 +222,14 @@ export async function ensureFirestoreSeeded(): Promise<void> {
       }
     }
 
-    // 2. Ensure primary platform super admin account is provisioned in Firestore users & team
+    // 2. Ensure primary platform super admin account is provisioned in Firestore users collection
     try {
       const superAdminData = {
         id: 'usr_superadmin_abhishaik',
         email: 'Abhishaik3007@gmail.com',
         name: 'Abhishek Kumar (Super Admin)',
         role: 'super_admin',
+        userType: 'super_admin',
         status: 'active',
         businessId: null,
         businessName: 'Platform',
@@ -229,16 +237,6 @@ export async function ensureFirestoreSeeded(): Promise<void> {
         createdAt: new Date().toISOString(),
       };
       await setDoc(doc(firestore, 'users', 'usr_superadmin_abhishaik'), superAdminData, { merge: true });
-      await setDoc(doc(firestore, 'team', 'usr_superadmin_abhishaik'), {
-        id: 'usr_superadmin_abhishaik',
-        email: 'Abhishaik3007@gmail.com',
-        name: 'Abhishek Kumar (Super Admin)',
-        role: 'super_admin',
-        status: 'active',
-        businessId: null,
-        businessName: 'Platform',
-        createdAt: new Date().toISOString(),
-      }, { merge: true });
     } catch (adminErr) {
       console.warn('[Firestore] Super admin provisioning note:', adminErr);
     }
@@ -444,9 +442,9 @@ export async function handleFirestoreApi(
       }
     }
 
-    // 5. /api/team
+    // 5. /api/team (reads and writes to unified users collection)
     if (cleanUrl === '/api/team' && method === 'GET') {
-      const snap = await getDocs(collection(firestore, 'team'));
+      const snap = await getDocs(collection(firestore, 'users'));
       const list = snap.docs
         .map((d) => d.data() as FirestoreTeamMember)
         .filter((t) => !t.id.startsWith('usr_mock_'));
@@ -466,7 +464,7 @@ export async function handleFirestoreApi(
         businessName: user.businessName || 'Venue',
         createdAt: new Date().toISOString(),
       };
-      await setDoc(doc(firestore, 'team', id), newMember);
+      await setDoc(doc(firestore, 'users', id), newMember);
       return newMember;
     }
 
