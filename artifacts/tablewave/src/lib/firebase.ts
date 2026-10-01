@@ -70,39 +70,50 @@ async function syncFirebaseUserDoc(
   const bizId = isSuper ? null : `biz_${cleanUid}`;
   const bizName = isSuper ? 'Platform' : (venueName?.trim() || `${customName?.trim() || user.displayName || user.email?.split('@')[0] || 'My'}'s Venue`);
 
+  // 1. Dedicated Super Admin Profile (stored in super_admins collection)
+  if (isSuper) {
+    const superAdminProfile = {
+      id: user.uid,
+      email: user.email || 'Abhishaik3007@gmail.com',
+      name: customName || user.displayName || 'Abhishek Kumar (Super Admin)',
+      role: 'super_admin' as const,
+      userType: 'super_admin' as const,
+      status: 'active' as const,
+      businessId: null,
+      businessName: 'Platform',
+      isSuperAdmin: true,
+      createdAt: new Date().toISOString(),
+    };
+
+    if (firestore) {
+      try {
+        await setDoc(doc(firestore, 'super_admins', user.uid), superAdminProfile, { merge: true });
+        await setDoc(doc(firestore, 'team', user.uid), superAdminProfile, { merge: true });
+      } catch (err) {
+        console.warn('[Firestore] Could not write super_admins doc:', err);
+      }
+    }
+    return superAdminProfile;
+  }
+
+  // 2. Regular User Profile: Business Admin (Venue Owner) or Staff (stored in users collection)
   const userProfile = {
     id: user.uid,
     email: user.email || 'user@venue.com',
-    name: customName || user.displayName || user.email?.split('@')[0] || (isSuper ? 'Super Admin' : 'Venue Admin'),
+    name: customName || user.displayName || user.email?.split('@')[0] || (resolvedRole === 'staff' ? 'Staff Member' : 'Venue Owner'),
     role: resolvedRole,
+    userType: (resolvedRole === 'staff' ? 'staff' : 'business_admin') as 'business_admin' | 'staff',
     status: 'active' as const,
     businessId: bizId,
     businessName: bizName,
-    isSuperAdmin: isSuper,
+    isSuperAdmin: false,
     createdAt: new Date().toISOString(),
   };
 
   if (firestore) {
     try {
       const ref = doc(firestore, 'users', user.uid);
-      const snap = await getDoc(ref);
-      if (snap.exists()) {
-        const data = snap.data();
-        const userIsSuper = data.role === 'super_admin' || isSuper || Boolean(data.isSuperAdmin);
-        const sanitized = {
-          ...data,
-          role: userIsSuper ? 'super_admin' : (data.role || 'business_admin'),
-          isSuperAdmin: userIsSuper,
-          businessId: userIsSuper ? null : data.businessId,
-          businessName: userIsSuper ? 'Platform' : data.businessName,
-        };
-        if (userIsSuper && (data.businessId || !data.isSuperAdmin)) {
-          try {
-            await setDoc(ref, sanitized, { merge: true });
-          } catch {}
-        }
-        return sanitized;
-      }
+      await setDoc(ref, userProfile, { merge: true });
 
       // Provision genuine unique business, outlet, and category for this genuine account
       if (bizId) {
@@ -149,8 +160,6 @@ async function syncFirebaseUserDoc(
           });
         }
       }
-
-      await setDoc(ref, userProfile);
     } catch (err) {
       console.warn('[Firestore] Could not write user doc, using local session:', err);
     }
