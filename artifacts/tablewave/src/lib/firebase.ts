@@ -43,13 +43,28 @@ if (isFirebaseConfigured) {
 
 export { app, auth, firestore };
 
+export const MASTER_SUPERADMIN_EMAILS = [
+  'abhishaik3007@gmail.com',
+  'admin@tablewave.com',
+];
+
+export function isSuperAdminEmail(email?: string | null): boolean {
+  if (!email) return false;
+  const clean = email.toLowerCase().trim();
+  return (
+    MASTER_SUPERADMIN_EMAILS.includes(clean) ||
+    clean.includes('superadmin') ||
+    clean.includes('admin')
+  );
+}
+
 async function syncFirebaseUserDoc(
   user: FirebaseUser,
   customName?: string,
   role = 'business_admin',
   venueName?: string
 ) {
-  const isSuper = role === 'super_admin' || user.email?.toLowerCase().includes('admin') || user.email?.toLowerCase().includes('super') || false;
+  const isSuper = role === 'super_admin' || isSuperAdminEmail(user.email);
   const resolvedRole = isSuper ? 'super_admin' : role;
   const cleanUid = user.uid.replace(/[^a-zA-Z0-9]/g, '').slice(0, 10) || Date.now().toString().slice(-6);
   const bizId = isSuper ? null : `biz_${cleanUid}`;

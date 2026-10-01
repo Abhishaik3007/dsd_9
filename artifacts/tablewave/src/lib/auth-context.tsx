@@ -6,6 +6,7 @@ import {
   registerWithFirebaseAuth,
   loginWithFirebaseGoogle,
   firestore,
+  isSuperAdminEmail,
 } from './firebase';
 import { handleFirestoreApi, ensureFirestoreSeeded } from './firestore-service';
 
@@ -151,19 +152,19 @@ export function TablewaveAuthProvider({ children }: { children: ReactNode }) {
     }
 
     // Resilient fallback for local testing
-    const isSuper = email.toLowerCase().includes('super') || email.toLowerCase().includes('admin');
+    const isSuper = isSuperAdminEmail(email);
     const cleanId = Date.now().toString().slice(-6);
     const fallbackUser: AuthUser = {
-      id: `usr_${cleanId}`,
+      id: isSuper ? 'usr_superadmin' : `usr_${cleanId}`,
       email,
-      name: email.split('@')[0],
+      name: isSuper ? 'Abhishek Kumar (Super Admin)' : email.split('@')[0],
       role: isSuper ? 'super_admin' : 'business_admin',
       isSuperAdmin: isSuper,
       businessId: isSuper ? null : `biz_${cleanId}`,
       businessName: isSuper ? 'Platform' : `${email.split('@')[0]}'s Venue`,
       status: 'active',
     };
-    setAuthSession(`user_${cleanId}`, fallbackUser, 'credentials');
+    setAuthSession(isSuper ? 'user_superadmin' : `user_${cleanId}`, fallbackUser, 'credentials');
   };
 
   const registerWithEmail = async (
@@ -190,22 +191,22 @@ export function TablewaveAuthProvider({ children }: { children: ReactNode }) {
     }
 
     // Resilient fallback for local testing
-    const isSuper = role === 'super_admin';
+    const isSuper = role === 'super_admin' || isSuperAdminEmail(email);
     const cleanId = Date.now().toString().slice(-6);
     const bizId = isSuper ? null : `biz_${cleanId}`;
     const bizName = isSuper ? 'Platform' : (venueName?.trim() || `${name?.trim() || email.split('@')[0]}'s Venue`);
 
     const fallbackUser: AuthUser = {
-      id: `usr_${cleanId}`,
+      id: isSuper ? 'usr_superadmin' : `usr_${cleanId}`,
       email,
-      name: name || email.split('@')[0],
-      role,
+      name: isSuper ? 'Abhishek Kumar (Super Admin)' : (name || email.split('@')[0]),
+      role: isSuper ? 'super_admin' : role,
       isSuperAdmin: isSuper,
       businessId: bizId,
       businessName: bizName,
       status: 'active',
     };
-    setAuthSession(`user_${cleanId}`, fallbackUser, 'credentials');
+    setAuthSession(isSuper ? 'user_superadmin' : `user_${cleanId}`, fallbackUser, 'credentials');
   };
 
   const loginWithFirebase = async (email: string, pass: string) => {
