@@ -206,7 +206,7 @@ export async function ensureFirestoreSeeded(): Promise<void> {
   if (!firestore || isSeeded || isSeeding) return;
   isSeeding = true;
   try {
-    // Only seed standard platform plans if empty (SaaS pricing tiers)
+    // 1. Only seed standard platform plans if empty (SaaS pricing tiers)
     const planSnap = await getDocs(collection(firestore, 'plans'));
     if (planSnap.empty) {
       console.log('[Firestore] Initializing platform plans...');
@@ -215,7 +215,35 @@ export async function ensureFirestoreSeeded(): Promise<void> {
       }
     }
 
-    // Clean up any dummy records from Firestore
+    // 2. Ensure primary platform super admin account is provisioned in Firestore users & team
+    try {
+      const superAdminData = {
+        id: 'usr_superadmin_abhishaik',
+        email: 'Abhishaik3007@gmail.com',
+        name: 'Abhishek Kumar (Super Admin)',
+        role: 'super_admin',
+        status: 'active',
+        businessId: null,
+        businessName: 'Platform',
+        isSuperAdmin: true,
+        createdAt: new Date().toISOString(),
+      };
+      await setDoc(doc(firestore, 'users', 'usr_superadmin_abhishaik'), superAdminData, { merge: true });
+      await setDoc(doc(firestore, 'team', 'usr_superadmin_abhishaik'), {
+        id: 'usr_superadmin_abhishaik',
+        email: 'Abhishaik3007@gmail.com',
+        name: 'Abhishek Kumar (Super Admin)',
+        role: 'super_admin',
+        status: 'active',
+        businessId: null,
+        businessName: 'Platform',
+        createdAt: new Date().toISOString(),
+      }, { merge: true });
+    } catch (adminErr) {
+      console.warn('[Firestore] Super admin provisioning note:', adminErr);
+    }
+
+    // 3. Clean up any dummy records from Firestore
     await cleanupDummyDataFromFirestore();
 
     isSeeded = true;

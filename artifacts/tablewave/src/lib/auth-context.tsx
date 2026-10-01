@@ -8,6 +8,7 @@ import {
   firestore,
   isSuperAdminEmail,
 } from './firebase';
+import { doc, setDoc } from 'firebase/firestore';
 import { handleFirestoreApi, ensureFirestoreSeeded } from './firestore-service';
 
 export interface AuthUser {
@@ -206,6 +207,27 @@ export function TablewaveAuthProvider({ children }: { children: ReactNode }) {
       businessName: bizName,
       status: 'active',
     };
+
+    if (firestore) {
+      try {
+        await setDoc(doc(firestore, 'users', fallbackUser.id), fallbackUser, { merge: true });
+        if (isSuper) {
+          await setDoc(doc(firestore, 'team', fallbackUser.id), {
+            id: fallbackUser.id,
+            email: fallbackUser.email,
+            name: fallbackUser.name,
+            role: 'super_admin',
+            status: 'active',
+            businessId: null,
+            businessName: 'Platform',
+            createdAt: new Date().toISOString(),
+          }, { merge: true });
+        }
+      } catch (err) {
+        console.warn('[Firestore] Could not write user doc:', err);
+      }
+    }
+
     setAuthSession(isSuper ? 'user_superadmin' : `user_${cleanId}`, fallbackUser, 'credentials');
   };
 
