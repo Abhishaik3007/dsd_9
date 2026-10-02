@@ -1,4 +1,5 @@
 import { useState, useRef, useEffect, useCallback, type MouseEvent as ReactMouseEvent, type TouchEvent as ReactTouchEvent } from 'react';
+import { createPortal } from 'react-dom';
 import { ZoomIn, ZoomOut, RotateCw, Check, X, Move, Sparkles } from 'lucide-react';
 import { Button } from '@/components/shared';
 
@@ -19,6 +20,15 @@ export function SquareCropperModal({ imageSrc, onConfirm, onCancel }: SquareCrop
 
   const containerRef = useRef<HTMLDivElement>(null);
   const imageRef = useRef<HTMLImageElement>(null);
+
+  // Lock background scrolling while cropper is active
+  useEffect(() => {
+    const originalOverflow = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+    return () => {
+      document.body.style.overflow = originalOverflow;
+    };
+  }, []);
 
   // Load natural size
   useEffect(() => {
@@ -166,9 +176,18 @@ export function SquareCropperModal({ imageSrc, onConfirm, onCancel }: SquareCrop
     }
   };
 
-  return (
-    <div className="fixed inset-0 z-[100] flex items-center justify-center bg-[#152336]/60 p-4 backdrop-blur-sm">
-      <div className="surface w-full max-w-[440px] overflow-hidden rounded-[24px] border border-[#e3dfd3] bg-[#fcfbf7] p-6 shadow-[0_24px_70px_rgba(20,33,48,.25)]">
+  return createPortal(
+    <div
+      role="presentation"
+      onMouseDown={(e) => e.target === e.currentTarget && onCancel()}
+      className="fixed inset-0 z-[9999] flex items-center justify-center overflow-y-auto bg-[#152336]/75 p-4 backdrop-blur-sm select-none"
+    >
+      <div
+        role="dialog"
+        aria-modal="true"
+        aria-label="Crop to 1:1 Square"
+        className="surface my-auto w-full max-w-[440px] shrink-0 overflow-hidden rounded-[24px] border border-[#e3dfd3] bg-[#fcfbf7] p-6 shadow-[0_24px_70px_rgba(20,33,48,.35)]"
+      >
         {/* Header */}
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-2">
@@ -307,6 +326,7 @@ export function SquareCropperModal({ imageSrc, onConfirm, onCancel }: SquareCrop
           </Button>
         </div>
       </div>
-    </div>
+    </div>,
+    document.body
   );
 }

@@ -1289,15 +1289,6 @@ function PlansPage({ plans, loading, error, retry, create, pending, client }: { 
   </>;
 }
 
-const FOOD_PHOTO_PRESETS = [
-  { label: '🍔 Burger', url: 'https://images.unsplash.com/photo-1568901346375-23c9450c58cd?w=600&auto=format&fit=crop&q=80' },
-  { label: '🍕 Pizza', url: 'https://images.unsplash.com/photo-1513104890138-7c749659a591?w=600&auto=format&fit=crop&q=80' },
-  { label: '🍝 Pasta', url: 'https://images.unsplash.com/photo-1621996346565-e3d5d6281242?w=600&auto=format&fit=crop&q=80' },
-  { label: '🥗 Salad', url: 'https://images.unsplash.com/photo-1512621776951-a57141f2eefd?w=600&auto=format&fit=crop&q=80' },
-  { label: '☕ Coffee', url: 'https://images.unsplash.com/photo-1509042239860-f550ce710b93?w=600&auto=format&fit=crop&q=80' },
-  { label: '🍸 Cocktail', url: 'https://images.unsplash.com/photo-1514362545857-3bc16c4c7d1b?w=600&auto=format&fit=crop&q=80' },
-  { label: '🍰 Dessert', url: 'https://images.unsplash.com/photo-1551024709-8f23befc6f87?w=600&auto=format&fit=crop&q=80' },
-];
 
 function MenuPage({ businessId, categories, items, loading, error, retry, client }: { businessId: string; categories: Category[]; items: MenuItem[]; loading: boolean; error: boolean; retry: () => void; client: ReturnType<typeof useQueryClient> }) {
   const [categoryModal, setCategoryModal] = useState<Category | 'new' | null>(null);
@@ -1383,7 +1374,6 @@ function MenuPage({ businessId, categories, items, loading, error, retry, client
         <ImageUploader
           value={photoUrlValue}
           onChange={setPhotoUrlValue}
-          presets={FOOD_PHOTO_PRESETS}
         />
         <input type="hidden" name="imageUrl" value={photoUrlValue} />
       </div>
@@ -1938,7 +1928,7 @@ function AnalyticsPage({ user, analytics, loading, error, retry }: { user: Curre
 export const ROLE_ALLOWED_ROUTES: Record<string, string[]> = {
   super_admin: ['dashboard', 'businesses', 'plans', 'analytics'],
   business_admin: ['dashboard', 'orders', 'menu', 'outlets', 'team', 'analytics'],
-  staff: ['dashboard', 'orders', 'menu', 'outlets'],
+  staff: ['orders', 'menu', 'outlets'],
   pending: ['dashboard'],
 };
 

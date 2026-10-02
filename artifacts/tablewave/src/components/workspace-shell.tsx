@@ -2,7 +2,7 @@ import { type ReactNode, useEffect, useState, useRef } from 'react';
 import { Link, useLocation } from 'wouter';
 import { useTablewaveAuth } from '@/lib/auth-context';
 import {
-  Bell, CheckCircle2, ChevronDown,
+  CheckCircle2, ChevronDown,
   KeyRound, Lock, LogOut,
   ShieldCheck, X,
 } from 'lucide-react';
@@ -30,7 +30,7 @@ const navigation = [
   { href: '/analytics', label: 'Platform Analytics', icon: RiLineChartLine, roles: ['super_admin'] },
 
   // Business / Vendor View (Restaurant / Venue management)
-  { href: '/dashboard', label: 'Venue Overview', icon: RiStore2Line, roles: ['business_admin', 'staff'] },
+  { href: '/dashboard', label: 'Venue Overview', icon: RiStore2Line, roles: ['business_admin'] },
   { href: '/orders', label: 'Live Orders', icon: RiFileList3Line, roles: ['business_admin', 'staff'] },
   { href: '/menu', label: 'Menu & Dishes', icon: RiRestaurant2Line, roles: ['business_admin', 'staff'] },
   { href: '/outlets', label: 'Outlets & QR', icon: RiQrScan2Line, roles: ['business_admin', 'staff'] },
@@ -85,7 +85,7 @@ interface SidebarContentProps {
 }
 
 function SidebarContent({
-  user: _user,
+  user,
   links,
   location,
   collapsed = false,
@@ -95,6 +95,8 @@ function SidebarContent({
   onCloseMobile,
   onSignOut,
 }: SidebarContentProps) {
+  const homeHref = user?.role === 'staff' ? '/orders' : '/dashboard';
+
   return (
     <aside
       className={`flex h-full flex-col bg-[#202f43] text-[#d5dce2] select-none transition-all duration-300 ${
@@ -125,8 +127,8 @@ function SidebarContent({
         ) : (
           <>
             <Link
-              href="/dashboard"
-              onClick={() => onNavigate('/dashboard')}
+              href={homeHref}
+              onClick={() => onNavigate(homeHref)}
               className="flex items-center gap-2 overflow-hidden cursor-pointer"
               title="Tablewave Workspace"
             >
@@ -487,21 +489,6 @@ export function WorkspaceShell({ user, children }: { user: CurrentUser; children
             </div>
 
             <div className="flex items-center gap-3">
-              <button
-                type="button"
-                aria-label="Notifications"
-                data-testid="button-notifications"
-                onClick={() =>
-                  window.dispatchEvent(
-                    new CustomEvent('tablewave-notice', { detail: 'You’re all caught up.' })
-                  )
-                }
-                className="icon-button relative"
-              >
-                <Bell size={17} />
-                <span className="absolute right-[7px] top-[7px] h-1.5 w-1.5 rounded-full bg-[#e38d53]" />
-              </button>
-              <div className="hidden h-7 w-px bg-[#e4e1d8] sm:block" />
               <div className="relative" ref={profileMenuRef}>
                 <button
                   type="button"

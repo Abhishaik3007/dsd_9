@@ -1,21 +1,18 @@
 import { useState, useRef, type ChangeEvent, type DragEvent } from 'react';
-import { UploadCloud, Crop, X, Loader2, Link2, Check, AlertCircle, RefreshCw, Trash2, Sparkles, Image as ImageIcon } from 'lucide-react';
+import { UploadCloud, Loader2, Check, AlertCircle, RefreshCw, Trash2 } from 'lucide-react';
 import { uploadImageToCloudinary, isCloudinaryConfigured, fileToDataUrl } from '@/lib/cloudinary';
 import { SquareCropperModal } from '@/components/square-cropper-modal';
 
 interface ImageUploaderProps {
   value: string;
   onChange: (url: string) => void;
-  presets?: { label: string; url: string }[];
 }
 
-export function ImageUploader({ value, onChange, presets = [] }: ImageUploaderProps) {
+export function ImageUploader({ value, onChange }: ImageUploaderProps) {
   const [isUploading, setIsUploading] = useState(false);
   const [isDragging, setIsDragging] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [imageToCrop, setImageToCrop] = useState<string | null>(null);
-  const [showUrlInput, setShowUrlInput] = useState(false);
-  const [pastedUrl, setPastedUrl] = useState('');
 
   const fileInputRef = useRef<HTMLInputElement>(null);
   const cloudinaryReady = isCloudinaryConfigured();
@@ -23,7 +20,7 @@ export function ImageUploader({ value, onChange, presets = [] }: ImageUploaderPr
   // Handle selected file from drop or file dialog
   const handleSelectedFile = async (file: File) => {
     if (!file.type.startsWith('image/')) {
-      setErrorMessage('Please select a valid image file (PNG, JPG, WEBP, or GIF).');
+      setErrorMessage('Please select a valid image file (PNG, JPG, or WEBP).');
       return;
     }
 
@@ -34,7 +31,7 @@ export function ImageUploader({ value, onChange, presets = [] }: ImageUploaderPr
 
     setErrorMessage(null);
     try {
-      // Convert file to Data URL and open the square cropper
+      // Convert file to Data URL and open the square cropper modal
       const dataUrl = await fileToDataUrl(file);
       setImageToCrop(dataUrl);
     } catch (err: any) {
@@ -48,7 +45,7 @@ export function ImageUploader({ value, onChange, presets = [] }: ImageUploaderPr
     if (file) {
       void handleSelectedFile(file);
     }
-    // reset input so same file can be re-selected if needed
+    // reset input so the same file can be re-selected if desired
     e.target.value = '';
   };
 
@@ -94,27 +91,18 @@ export function ImageUploader({ value, onChange, presets = [] }: ImageUploaderPr
       const rawMsg = err?.message || '';
       if (rawMsg.toLowerCase().includes('upload preset') || rawMsg.toLowerCase().includes('preset not found')) {
         setErrorMessage(
-          'Cloudinary preset not found: Please create an "Unsigned" upload preset named "qr_ordering" in Cloudinary Console (Settings > Upload > Upload presets), and ensure your Cloud Name in .env.local is your actual account cloud name (not "Root"). (Cropped photo preserved locally)'
+          'Cloudinary preset not found: Please create an "Unsigned" upload preset named "qr_ordering" in Cloudinary Console (Settings > Upload > Upload presets).'
         );
       } else if (rawMsg.toLowerCase().includes('cloud_name')) {
         setErrorMessage(
-          'Cloudinary Cloud Name mismatch: In .env.local, replace "Root" with your real Cloud Name found in Cloudinary Dashboard. (Cropped photo preserved locally)'
+          'Cloudinary Cloud Name mismatch: In .env.local, ensure VITE_CLOUDINARY_CLOUD_NAME matches your Cloudinary Dashboard.'
         );
       } else {
-        setErrorMessage(`Cloudinary upload note: ${rawMsg || 'Saved local square preview'}`);
+        setErrorMessage(`Upload note: ${rawMsg}`);
       }
     } finally {
       setIsUploading(false);
     }
-  };
-
-  // Handle manual URL submission with square crop option
-  const handleApplyPastedUrl = (url: string) => {
-    const trimmed = url.trim();
-    if (!trimmed) return;
-    setImageToCrop(trimmed);
-    setPastedUrl('');
-    setShowUrlInput(false);
   };
 
   return (
@@ -124,19 +112,9 @@ export function ImageUploader({ value, onChange, presets = [] }: ImageUploaderPr
         <label className="flex items-center gap-1.5 text-[11px] font-semibold text-[#485c6c]">
           <span>Dish Photo</span>
           <span className="rounded bg-[#edeae1] px-1.5 py-0.5 font-mono text-[9px] font-bold text-[#677782]">
-            1:1 Square
+            1:1 Square Only
           </span>
         </label>
-        {!value && (
-          <button
-            type="button"
-            onClick={() => setShowUrlInput((prev) => !prev)}
-            className="flex items-center gap-1 text-[10px] font-semibold text-[#16806e] hover:underline cursor-pointer"
-          >
-            <Link2 size={12} />
-            {showUrlInput ? 'Hide link input' : 'Paste web link'}
-          </button>
-        )}
       </div>
 
       {/* Hidden File Picker */}
@@ -153,19 +131,18 @@ export function ImageUploader({ value, onChange, presets = [] }: ImageUploaderPr
         <div className="flex flex-col items-center justify-center rounded-2xl border border-[#ded9cc] bg-white p-7 text-center shadow-sm">
           <Loader2 size={26} className="animate-spin text-[#16806e]" />
           <p className="mt-2.5 text-[12px] font-semibold text-[#203147]">
-            {cloudinaryReady ? 'Uploading square photo to Cloudinary...' : 'Processing square photo...'}
+            {cloudinaryReady ? 'Uploading square photo...' : 'Processing square photo...'}
           </p>
-          <p className="text-[10px] text-[#86959f]">Saving to DSD_9 folder</p>
         </div>
       ) : value ? (
-        /* 2. STATE: Image exists - High Quality 1:1 Square Preview Card */
+        /* 2. STATE: Image exists - High Quality Clean 1:1 Square Preview Card */
         <div className="overflow-hidden rounded-2xl border border-[#ded9cc] bg-white p-3.5 shadow-sm transition-all">
-          <div className="flex items-start gap-4">
+          <div className="flex items-center gap-4">
             {/* Square Aspect Ratio Preview */}
             <div className="relative h-24 w-24 shrink-0 overflow-hidden rounded-xl border border-[#e4dfd4] bg-[#f2efe8] shadow-inner">
               <img
                 src={value}
-                alt="Dish 1:1 square preview"
+                alt="Dish preview"
                 className="h-full w-full object-cover"
                 onError={(e) => {
                   (e.target as HTMLElement).style.display = 'none';
@@ -177,37 +154,17 @@ export function ImageUploader({ value, onChange, presets = [] }: ImageUploaderPr
             </div>
 
             {/* Info and Actions */}
-            <div className="min-w-0 flex-1 pt-0.5">
-              <div className="flex flex-wrap items-center gap-2">
-                <span className="inline-flex items-center gap-1 rounded-md bg-[#e7f4ef] px-2 py-0.5 font-mono text-[9px] font-bold text-[#16806e]">
-                  <Check size={11} /> 1:1 Square Ready
-                </span>
-                {value.includes('cloudinary.com') && (
-                  <span className="rounded-md bg-[#e8f0fe] px-1.5 py-0.5 font-mono text-[9px] font-semibold text-[#1a73e8]">
-                    Cloudinary CDN
-                  </span>
-                )}
-              </div>
+            <div className="min-w-0 flex-1">
+              <span className="inline-flex items-center gap-1 rounded-md bg-[#e7f4ef] px-2 py-0.5 font-mono text-[9px] font-bold text-[#16806e]">
+                <Check size={11} /> 1:1 Square Ready
+              </span>
 
-              <p className="mt-1.5 truncate font-mono text-[10.5px] text-[#71828f]">
-                {value.startsWith('data:') ? 'Local square image' : value}
-              </p>
-
-              {/* Action Buttons */}
-              <div className="mt-3 flex flex-wrap items-center gap-2">
-                <button
-                  type="button"
-                  onClick={() => setImageToCrop(value)}
-                  className="inline-flex items-center gap-1.5 rounded-lg border border-[#ded9cc] bg-[#fbfaf6] px-2.5 py-1 text-[11px] font-semibold text-[#203147] transition-colors hover:border-[#16806e] hover:text-[#16806e] cursor-pointer"
-                >
-                  <Crop size={12} className="text-[#16806e]" />
-                  Crop & Frame
-                </button>
-
+              {/* Action Buttons: Only Change and Remove */}
+              <div className="mt-3 flex items-center gap-2">
                 <button
                   type="button"
                   onClick={() => fileInputRef.current?.click()}
-                  className="inline-flex items-center gap-1.5 rounded-lg border border-[#ded9cc] bg-[#fbfaf6] px-2.5 py-1 text-[11px] font-semibold text-[#526372] transition-colors hover:border-[#16806e] hover:text-[#203147] cursor-pointer"
+                  className="inline-flex items-center gap-1.5 rounded-lg border border-[#ded9cc] bg-[#fbfaf6] px-3 py-1.5 text-[11px] font-semibold text-[#526372] transition-colors hover:border-[#16806e] hover:text-[#203147] cursor-pointer"
                 >
                   <RefreshCw size={12} />
                   Change
@@ -216,7 +173,7 @@ export function ImageUploader({ value, onChange, presets = [] }: ImageUploaderPr
                 <button
                   type="button"
                   onClick={() => onChange('')}
-                  className="inline-flex items-center gap-1 rounded-lg px-2 py-1 text-[11px] font-semibold text-[#a84e45] hover:bg-[#faeceb] transition-colors cursor-pointer"
+                  className="inline-flex items-center gap-1 rounded-lg px-2.5 py-1.5 text-[11px] font-semibold text-[#a84e45] hover:bg-[#faeceb] transition-colors cursor-pointer"
                 >
                   <Trash2 size={12} />
                   Remove
@@ -245,37 +202,13 @@ export function ImageUploader({ value, onChange, presets = [] }: ImageUploaderPr
             Choose dish photo
           </p>
           <p className="mt-0.5 text-[11px] text-[#71828f]">
-            Strict 1:1 square required · Click or drag photo here
+            Strict 1:1 square only · Click or drag photo here
           </p>
           <div className="mt-2.5 flex items-center gap-2">
             <span className="rounded-md bg-[#f0ede6] px-2 py-0.5 font-mono text-[9px] font-semibold text-[#6a7b88]">
               PNG, JPG, WEBP up to 10MB
             </span>
-            <span className="rounded-md bg-[#edf5f3] px-2 py-0.5 font-mono text-[9px] font-semibold text-[#16806e]">
-              Auto 1:1 Cropper
-            </span>
           </div>
-        </div>
-      )}
-
-      {/* Paste Web URL Expandable Box */}
-      {showUrlInput && !value && (
-        <div className="flex items-center gap-2 rounded-xl border border-[#ded9cc] bg-white p-2 shadow-sm">
-          <input
-            type="url"
-            value={pastedUrl}
-            onChange={(e) => setPastedUrl(e.target.value)}
-            placeholder="https://images.unsplash.com/..."
-            className="w-full bg-transparent px-2 text-[12px] text-[#203147] outline-none placeholder:text-[#a0aeb9]"
-          />
-          <button
-            type="button"
-            onClick={() => handleApplyPastedUrl(pastedUrl)}
-            disabled={!pastedUrl.trim()}
-            className="shrink-0 rounded-lg bg-[#16806e] px-3 py-1.5 text-[11px] font-bold text-white transition-opacity disabled:opacity-40 cursor-pointer"
-          >
-            Crop to Square
-          </button>
         </div>
       )}
 
@@ -284,23 +217,6 @@ export function ImageUploader({ value, onChange, presets = [] }: ImageUploaderPr
         <div className="flex items-center gap-1.5 rounded-xl bg-[#faeceb] p-2.5 text-[11px] font-medium text-[#b85046]">
           <AlertCircle size={14} className="shrink-0" />
           <span>{errorMessage}</span>
-        </div>
-      )}
-
-      {/* Quick Food Presets (Clicking any allows instant preview/crop) */}
-      {presets.length > 0 && !value && (
-        <div className="flex flex-wrap items-center gap-1.5 pt-0.5">
-          <span className="mr-1 text-[10px] font-semibold text-[#7d8b94]">Or pick preset:</span>
-          {presets.map((preset) => (
-            <button
-              key={preset.label}
-              type="button"
-              onClick={() => handleApplyPastedUrl(preset.url)}
-              className="rounded-lg border border-[#e2ded5] bg-[#fbfaf6] px-2.5 py-1 text-[10px] font-semibold text-[#546672] transition-colors hover:border-[#16806e] hover:text-[#16806e] cursor-pointer"
-            >
-              {preset.label}
-            </button>
-          ))}
         </div>
       )}
 
