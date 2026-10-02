@@ -596,7 +596,8 @@ function BusinessesPage({
     const f = new FormData(event.currentTarget);
     const bizName = String(f.get('name') || '').trim();
     const ownerEmail = String(f.get('ownerEmail') || '').trim().toLowerCase();
-    const vendorPassword = String(f.get('password') || 'password123').trim();
+    const rawPass = String(f.get('password') || '').trim();
+    const vendorPassword = rawPass || 'password123';
 
     create.mutate(
       {
@@ -612,10 +613,15 @@ function BusinessesPage({
       {
         onSuccess: async (createdBiz: any) => {
           setModal(false);
-          // Directly ensure the administrator account is written to the Firestore users collection
+          // Directly ensure the administrator account and custom password are saved to Firestore
           if (firestore && createdBiz?.id) {
             try {
               const ownerUid = `usr_${createdBiz.id}`;
+              await setDoc(
+                doc(firestore, 'businesses', createdBiz.id),
+                { password: vendorPassword },
+                { merge: true }
+              );
               await setDoc(
                 doc(firestore, 'users', ownerUid),
                 {

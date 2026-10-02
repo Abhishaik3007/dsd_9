@@ -245,20 +245,31 @@ export async function ensureFirestoreSeeded(): Promise<void> {
         const b = bDoc.data() as FirestoreBusiness;
         if (b.ownerEmail && !b.id.startsWith('biz_demo_')) {
           const ownerUid = `usr_${b.id}`;
-          const ownerUser = {
-            id: ownerUid,
-            email: b.ownerEmail.toLowerCase().trim(),
-            name: `${b.name} Admin`,
-            role: 'business_admin' as const,
-            userType: 'business_admin' as const,
-            status: b.status || 'active',
-            businessId: b.id,
-            businessName: b.name,
-            isSuperAdmin: false,
-            password: (b as any).password || 'password123',
-            createdAt: b.createdAt || new Date().toISOString(),
-          };
-          await setDoc(doc(firestore, 'users', ownerUid), ownerUser, { merge: true });
+          const userDocRef = doc(firestore, 'users', ownerUid);
+          const existingUserSnap = await getDoc(userDocRef);
+
+          if (!existingUserSnap.exists()) {
+            const ownerUser = {
+              id: ownerUid,
+              email: b.ownerEmail.toLowerCase().trim(),
+              name: `${b.name} Admin`,
+              role: 'business_admin' as const,
+              userType: 'business_admin' as const,
+              status: b.status || 'active',
+              businessId: b.id,
+              businessName: b.name,
+              isSuperAdmin: false,
+              password: (b as any).password || 'password123',
+              createdAt: b.createdAt || new Date().toISOString(),
+            };
+            await setDoc(userDocRef, ownerUser, { merge: true });
+          } else {
+            // Document already exists! Preserve user's existing custom password
+            const userData = existingUserSnap.data();
+            if (!userData.password && (b as any).password) {
+              await setDoc(userDocRef, { password: (b as any).password }, { merge: true });
+            }
+          }
         }
       }
     } catch (adminErr) {
