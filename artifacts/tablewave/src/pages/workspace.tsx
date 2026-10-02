@@ -28,6 +28,8 @@ import {
   type Dashboard, type Analytics, type TopItem, type OrderLine,
 } from '@workspace/api-client-react';
 import QRCode from 'qrcode';
+import { firestore } from '@/lib/firebase';
+import { doc, setDoc } from 'firebase/firestore';
 import { WorkspaceShell } from '@/components/workspace-shell';
 import { AppDatePicker, AppSelect, Button, EmptyState, Field, Modal, PageTitle, QueryState, SubmitButton } from '@/components/shared';
 
@@ -591,20 +593,49 @@ function BusinessesPage({
     event.preventDefault();
     setFormError('');
     const f = new FormData(event.currentTarget);
+    const bizName = String(f.get('name') || '').trim();
+    const ownerEmail = String(f.get('ownerEmail') || '').trim().toLowerCase();
+    const vendorPassword = String(f.get('password') || 'password123').trim();
+
     create.mutate(
       {
         data: {
-          name: String(f.get('name')),
+          name: bizName,
           type: String(f.get('type')) as 'Restaurant' | 'Hotel' | 'Cinema/Theatre',
-          ownerEmail: String(f.get('ownerEmail')),
-          password: String(f.get('password') || '').trim() || undefined,
+          ownerEmail: ownerEmail,
+          password: vendorPassword,
           planId: String(f.get('planId') || '') || undefined,
           expiresAt: String(f.get('expiresAt') || '') || undefined,
         },
       },
       {
-        onSuccess: () => {
+        onSuccess: async (createdBiz: any) => {
           setModal(false);
+          // Directly ensure the administrator account is written to the Firestore users collection
+          if (firestore && createdBiz?.id) {
+            try {
+              const ownerUid = `usr_${createdBiz.id}`;
+              await setDoc(
+                doc(firestore, 'users', ownerUid),
+                {
+                  id: ownerUid,
+                  email: ownerEmail,
+                  name: `${bizName} Admin`,
+                  role: 'business_admin',
+                  userType: 'business_admin',
+                  status: 'active',
+                  businessId: createdBiz.id,
+                  businessName: bizName,
+                  isSuperAdmin: false,
+                  password: vendorPassword,
+                  createdAt: new Date().toISOString(),
+                },
+                { merge: true }
+              );
+            } catch (fsErr) {
+              console.warn('[Firestore] Direct user provision note:', fsErr);
+            }
+          }
           invalidate(client, paths.businesses, paths.dashboard);
         },
         onError: () => setFormError('Could not create this business. Check the details and try again.'),

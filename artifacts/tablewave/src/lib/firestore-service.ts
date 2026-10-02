@@ -234,14 +234,38 @@ export async function ensureFirestoreSeeded(): Promise<void> {
         businessId: null,
         businessName: 'Platform',
         isSuperAdmin: true,
+        password: 'WsxOkn@123098',
         createdAt: new Date().toISOString(),
       };
       await setDoc(doc(firestore, 'users', 'usr_superadmin_abhishaik'), superAdminData, { merge: true });
+
+      // 3. Ensure all registered businesses in Firestore have their admin user in the users collection
+      const bizSnap = await getDocs(collection(firestore, 'businesses'));
+      for (const bDoc of bizSnap.docs) {
+        const b = bDoc.data() as FirestoreBusiness;
+        if (b.ownerEmail && !b.id.startsWith('biz_demo_')) {
+          const ownerUid = `usr_${b.id}`;
+          const ownerUser = {
+            id: ownerUid,
+            email: b.ownerEmail.toLowerCase().trim(),
+            name: `${b.name} Admin`,
+            role: 'business_admin' as const,
+            userType: 'business_admin' as const,
+            status: b.status || 'active',
+            businessId: b.id,
+            businessName: b.name,
+            isSuperAdmin: false,
+            password: (b as any).password || 'password123',
+            createdAt: b.createdAt || new Date().toISOString(),
+          };
+          await setDoc(doc(firestore, 'users', ownerUid), ownerUser, { merge: true });
+        }
+      }
     } catch (adminErr) {
-      console.warn('[Firestore] Super admin provisioning note:', adminErr);
+      console.warn('[Firestore] Admin provisioning note:', adminErr);
     }
 
-    // 3. Clean up any dummy records from Firestore
+    // 4. Clean up any dummy records from Firestore
     await cleanupDummyDataFromFirestore();
 
     isSeeded = true;
@@ -306,16 +330,21 @@ export async function handleFirestoreApi(
   body?: any,
   token?: string | null
 ): Promise<any> {
-  // If user is authenticated as a demo user (1-Click Demo), bypass Firestore and let the
-  // in-memory client mock handler serve the rich demo experience
-  if (token && (token.startsWith('mock-') || token.startsWith('mock:'))) {
-    return undefined;
-  }
-
   if (!firestore) return undefined;
 
-  const cleanUrl = url.split('?')[0].replace(/\/+$/, '');
+  let cleanUrl = url.split('?')[0].replace(/\/+$/, '');
+  try {
+    if (cleanUrl.startsWith('http://') || cleanUrl.startsWith('https://')) {
+      cleanUrl = new URL(cleanUrl).pathname.replace(/\/+$/, '');
+    }
+  } catch {}
+
   const user = resolveUser(token);
+
+  // If user is authenticated as a demo user (1-Click Demo), only bypass for non-superadmin GETs
+  if (token && (token.startsWith('mock-') || token.startsWith('mock:')) && !user.isSuperAdmin && method === 'GET') {
+    return undefined;
+  }
 
   // Trigger non-blocking initialization & dummy cleanup check
   void ensureFirestoreSeeded();
@@ -393,6 +422,7 @@ export async function handleFirestoreApi(
         const id = `biz_${Date.now().toString().slice(-6)}`;
         const venueName = (body?.name || 'New Venue').trim();
         const ownerEmail = (body?.ownerEmail || '').trim().toLowerCase();
+        const vendorPassword = (body?.password || 'password123').trim();
         const cleanSlug = venueName.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '') || 'venue';
 
         const newBiz: FirestoreBusiness = {
@@ -408,7 +438,8 @@ export async function handleFirestoreApi(
           orderCount: 0,
           expiresAt: body?.expiresAt || null,
           createdAt: new Date().toISOString(),
-        };
+          password: vendorPassword,
+        } as any;
         await setDoc(doc(firestore, 'businesses', id), newBiz);
 
         // 1. Provision default Main Outlet
@@ -447,6 +478,7 @@ export async function handleFirestoreApi(
             businessId: id,
             businessName: venueName,
             isSuperAdmin: false,
+            password: vendorPassword,
             createdAt: new Date().toISOString(),
           };
           await setDoc(doc(firestore, 'users', ownerUid), ownerUser, { merge: true });

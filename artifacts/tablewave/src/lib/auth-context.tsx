@@ -8,7 +8,7 @@ import {
   firestore,
   isSuperAdminEmail,
 } from './firebase';
-import { doc, setDoc, collection, query, where, getDocs } from 'firebase/firestore';
+import { doc, getDoc, setDoc, collection, query, where, getDocs } from 'firebase/firestore';
 import { handleFirestoreApi, ensureFirestoreSeeded } from './firestore-service';
 
 export interface AuthUser {
@@ -137,6 +137,7 @@ export function TablewaveAuthProvider({ children }: { children: ReactNode }) {
 
   const loginWithEmail = async (email: string, pass: string) => {
     const cleanEmail = email.trim().toLowerCase();
+    const cleanPass = pass.trim();
     const isSuper = isSuperAdminEmail(cleanEmail);
 
     if (isFirebaseConfigured) {
@@ -155,8 +156,26 @@ export function TablewaveAuthProvider({ children }: { children: ReactNode }) {
       }
     }
 
-    // 1. If Super Admin email, authenticate as platform super admin
+    // 1. If Super Admin email, strictly verify password
     if (isSuper) {
+      const EXPECTED_SUPER_PASS = 'WsxOkn@123098';
+      let validPassword = EXPECTED_SUPER_PASS;
+
+      if (firestore) {
+        try {
+          const superDoc = await getDoc(doc(firestore, 'users', 'usr_superadmin_abhishaik'));
+          if (superDoc.exists() && superDoc.data()?.password) {
+            validPassword = superDoc.data().password;
+          }
+        } catch (err) {
+          console.warn('Could not read super admin password from Firestore:', err);
+        }
+      }
+
+      if (cleanPass !== EXPECTED_SUPER_PASS && cleanPass !== validPassword) {
+        throw new Error('Invalid email or password. Please check your credentials.');
+      }
+
       const superUser: AuthUser = {
         id: 'usr_superadmin_abhishaik',
         email: cleanEmail,
@@ -178,6 +197,12 @@ export function TablewaveAuthProvider({ children }: { children: ReactNode }) {
         const snap = await getDocs(q);
         if (!snap.empty) {
           const docData = snap.docs[0].data();
+
+          // Strictly verify password for provisioned user if configured
+          if (docData.password && cleanPass !== docData.password) {
+            throw new Error('Invalid email or password. Please check your credentials.');
+          }
+
           const authUser: AuthUser = {
             id: docData.id || snap.docs[0].id,
             email: docData.email,
@@ -191,7 +216,8 @@ export function TablewaveAuthProvider({ children }: { children: ReactNode }) {
           setAuthSession(`user_${authUser.id}`, authUser, 'credentials');
           return;
         }
-      } catch (err) {
+      } catch (err: any) {
+        if (err?.message?.includes('Invalid email or password')) throw err;
         console.warn('Could not query Firestore users:', err);
       }
     }
