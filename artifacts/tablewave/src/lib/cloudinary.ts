@@ -25,7 +25,7 @@ export function isCloudinaryConfigured(): boolean {
  * Returns the secure HTTPS URL of the uploaded asset.
  */
 export async function uploadImageToCloudinary(
-  file: File,
+  file: File | Blob,
   folder?: string
 ): Promise<string> {
   const config = getCloudinaryConfig();
@@ -39,7 +39,11 @@ export async function uploadImageToCloudinary(
   const targetFolder = folder || config.folder || 'DSD_9';
 
   const formData = new FormData();
-  formData.append('file', file);
+  if (file instanceof File) {
+    formData.append('file', file);
+  } else {
+    formData.append('file', file, 'dish_image.jpg');
+  }
   formData.append('upload_preset', config.uploadPreset);
   if (targetFolder) {
     formData.append('folder', targetFolder);
