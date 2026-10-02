@@ -67,6 +67,10 @@ export function Storefront() {
   }
   function submitOrder(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault(); setFormError('');
+    if (cart.length === 0) {
+      setFormError('Your cart is empty. Please add items before placing an order.');
+      return;
+    }
     const form = new FormData(event.currentTarget);
     const customerName = String(form.get('customerName') || '').trim();
     const cleanPhone = (phoneInput || String(form.get('customerPhone') || '')).replace(/\D/g, '');
@@ -182,30 +186,93 @@ export function Storefront() {
         {selected.addOns.length > 0 && <fieldset><legend className="mb-2 text-[12px] font-semibold text-[#53616e]">Add something extra</legend><div className="space-y-2">{selected.addOns.map((addOn) => <label key={addOn.name} className="flex items-center justify-between rounded-xl border border-[#e7e4dc] bg-white/60 px-3 py-2.5 text-[11px] text-[#556774]"><span className="flex items-center gap-2"><input type="checkbox" name="addOn" value={addOn.name} className="h-4 w-4 accent-[#16806e]" />{addOn.name}</span><span className="font-mono text-[10px]">+{formatMoney(addOn.price)}</span></label>)}</div></fieldset>}
         <div className="flex justify-end border-t border-[#ebe8df] pt-4"><Button type="submit">Add to order <Plus size={15} /></Button></div>
       </form></Modal>}
-      {checkoutOpen && <Modal title="One last thing." subtitle={`Your order will be sent to ${data.outlet.name}, table ${data.tableNumber}.`} onClose={() => setCheckoutOpen(false)}><form onSubmit={submitOrder} className="space-y-4">
-        <div className="max-h-[220px] overflow-y-auto rounded-[13px] bg-[#f5f4ee] px-3">{cart.map((line) => <CartLineRow key={line.key} line={line} decrement={() => alterQuantity(line, -1)} increment={() => alterQuantity(line, 1)} />)}</div>
-        <Field label="Your name" hint="Required"><input className="field" name="customerName" autoComplete="name" required placeholder="How should we find you?" data-testid="input-customer-name" /></Field>
-        <Field label="Mobile number" hint="Required (10 digits)">
-          <input
-            className="field font-mono text-[13px] tracking-wide"
-            name="customerPhone"
-            type="tel"
-            inputMode="numeric"
-            autoComplete="tel"
-            required
-            maxLength={10}
-            minLength={10}
-            pattern="[0-9]{10}"
-            placeholder="10-digit mobile number"
-            value={phoneInput}
-            onChange={(e) => setPhoneInput(e.target.value.replace(/\D/g, '').slice(0, 10))}
-            data-testid="input-customer-phone"
-          />
-        </Field>
-        <div className="flex items-center justify-between border-t border-[#ebe8df] pt-3"><span className="text-[11px] text-[#74828a]">Order total</span><span className="font-display text-[19px] font-bold">{formatMoney(total)}</span></div>
-        {formError && <p className="rounded-lg bg-[#fae9e6] px-3 py-2 text-[11px] text-[#a84e45]">{formError}</p>}
-        <SubmitButton pending={placeOrder.isPending} className="w-full">Place order <ArrowRight size={15} /></SubmitButton>
-      </form></Modal>}
+      {checkoutOpen && (
+        <Modal
+          title={cart.length > 0 ? "One last thing." : "Your cart is empty"}
+          subtitle={
+            cart.length > 0
+              ? `Your order will be sent to ${data.outlet.name}, table ${data.tableNumber}.`
+              : "You removed all items from your order."
+          }
+          onClose={() => setCheckoutOpen(false)}
+        >
+          {cart.length > 0 ? (
+            <form onSubmit={submitOrder} className="space-y-4">
+              <div className="max-h-[220px] overflow-y-auto rounded-[13px] bg-[#f5f4ee] px-3">
+                {cart.map((line) => (
+                  <CartLineRow
+                    key={line.key}
+                    line={line}
+                    decrement={() => alterQuantity(line, -1)}
+                    increment={() => alterQuantity(line, 1)}
+                  />
+                ))}
+              </div>
+              <Field label="Your name" hint="Required">
+                <input
+                  className="field"
+                  name="customerName"
+                  autoComplete="name"
+                  required
+                  placeholder="How should we find you?"
+                  data-testid="input-customer-name"
+                />
+              </Field>
+              <Field label="Mobile number" hint="Required (10 digits)">
+                <input
+                  className="field font-mono text-[13px] tracking-wide"
+                  name="customerPhone"
+                  type="tel"
+                  inputMode="numeric"
+                  autoComplete="tel"
+                  required
+                  maxLength={10}
+                  minLength={10}
+                  pattern="[0-9]{10}"
+                  placeholder="10-digit mobile number"
+                  value={phoneInput}
+                  onChange={(e) => setPhoneInput(e.target.value.replace(/\D/g, '').slice(0, 10))}
+                  data-testid="input-customer-phone"
+                />
+              </Field>
+              <div className="flex items-center justify-between border-t border-[#ebe8df] pt-3">
+                <span className="text-[11px] text-[#74828a]">Order total</span>
+                <span className="font-display text-[19px] font-bold">{formatMoney(total)}</span>
+              </div>
+              {formError && (
+                <p className="rounded-lg bg-[#fae9e6] px-3 py-2 text-[11px] text-[#a84e45]">
+                  {formError}
+                </p>
+              )}
+              <SubmitButton pending={placeOrder.isPending} disabled={cart.length === 0} className="w-full">
+                Place order <ArrowRight size={15} />
+              </SubmitButton>
+              <p className="text-center text-[9px] leading-4 text-[#99a2a1]">
+                No payment is taken here. Your team will take care of you.
+              </p>
+            </form>
+          ) : (
+            <div className="py-6 text-center">
+              <span className="mx-auto grid h-12 w-12 place-items-center rounded-2xl bg-[#f0efe8] text-[#88959a]">
+                <ShoppingBag size={22} />
+              </span>
+              <p className="mt-3 font-display text-[15px] font-bold text-[#334657]">
+                Nothing left in your cart
+              </p>
+              <p className="mt-1 text-[11px] text-[#7e8b91]">
+                Add dishes from the menu to place an order.
+              </p>
+              <Button
+                type="button"
+                onClick={() => setCheckoutOpen(false)}
+                className="mt-5 w-full"
+              >
+                Return to menu
+              </Button>
+            </div>
+          )}
+        </Modal>
+      )}
     </>}</QueryState>
     <footer className="mx-auto flex max-w-[1100px] items-center justify-between border-t border-[#e8e5dd] px-4 py-5 text-[9px] text-[#9aa3a1] sm:px-7"><span>Powered by Tablewave</span><span>Good service, in motion.</span></footer>
   </div>;

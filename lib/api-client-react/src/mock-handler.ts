@@ -758,6 +758,9 @@ export function handleClientMockRequest(
 
   // 12. /api/store/orders (also supports /api/store/order)
   if ((cleanUrl === '/api/store/orders' || cleanUrl === '/api/store/order') && method === 'POST') {
+    if (!body?.items || !Array.isArray(body.items) || body.items.length === 0) {
+      throw new Error('Your cart is empty. Please add items to place an order.');
+    }
     const total = (body?.items || []).reduce((sum: number, item: any) => sum + (item.unitPrice || 0) * (item.quantity || 1), 0);
     const newOrder: MockOrder = {
       id: `ord_${Date.now().toString().slice(-6)}`,

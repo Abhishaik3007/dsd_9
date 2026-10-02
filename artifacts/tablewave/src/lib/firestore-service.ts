@@ -888,6 +888,10 @@ export async function handleFirestoreApi(
         allOut.find((o) => o.businessId === targetBiz?.id) ||
         allOut[0];
 
+      if (!body?.items || !Array.isArray(body.items) || body.items.length === 0) {
+        throw new Error('Your cart is empty. Please add items to place an order.');
+      }
+
       const total = (body?.items || []).reduce(
         (sum: number, item: any) => sum + (item.unitPrice || 0) * (item.quantity || 1),
         0
