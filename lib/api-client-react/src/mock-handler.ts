@@ -756,8 +756,8 @@ export function handleClientMockRequest(
     };
   }
 
-  // 12. /api/store/order
-  if (cleanUrl === '/api/store/order' && method === 'POST') {
+  // 12. /api/store/orders (also supports /api/store/order)
+  if ((cleanUrl === '/api/store/orders' || cleanUrl === '/api/store/order') && method === 'POST') {
     const total = (body?.items || []).reduce((sum: number, item: any) => sum + (item.unitPrice || 0) * (item.quantity || 1), 0);
     const newOrder: MockOrder = {
       id: `ord_${Date.now().toString().slice(-6)}`,
@@ -765,9 +765,9 @@ export function handleClientMockRequest(
       outletId: "out_juniper_dt",
       businessName: "The Juniper Room",
       outletName: "Downtown Dining Room",
-      tableNumber: body?.tableNumber || "1",
-      customerName: body?.customerName || "Guest",
-      customerPhone: body?.customerPhone,
+      tableNumber: String(body?.tableNumber || "1"),
+      customerName: String(body?.customerName || "Guest").trim() || "Guest",
+      customerPhone: body?.customerPhone ? String(body.customerPhone).trim() : '',
       status: "new",
       total,
       items: body?.items || [],

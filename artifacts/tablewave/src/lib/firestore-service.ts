@@ -789,7 +789,11 @@ export async function handleFirestoreApi(
         .filter((i) => !i.businessId.startsWith('biz_demo_'));
 
       // Find the specific target business requested
-      const targetBiz = allBiz.find((b) => b.slug === bParam || b.id === bParam) || allBiz[0];
+      const bParamLower = bParam.toLowerCase();
+      const oParamLower = oParam.toLowerCase();
+      const targetBiz =
+        allBiz.find((b) => b.slug?.toLowerCase() === bParamLower || b.id === bParam) ||
+        allBiz[0];
 
       if (!targetBiz) {
         return {
@@ -803,7 +807,7 @@ export async function handleFirestoreApi(
 
       // Find the specific target outlet for that business
       const targetOutlet =
-        allOut.find((o) => (o.slug === oParam || o.id === oParam) && o.businessId === targetBiz.id) ||
+        allOut.find((o) => (o.slug?.toLowerCase() === oParamLower || o.id === oParam) && o.businessId === targetBiz.id) ||
         allOut.find((o) => o.businessId === targetBiz.id) ||
         allOut[0] ||
         { id: `out_${targetBiz.id}_1`, name: 'Main Room', slug: 'main', address: '', tableCount: 10, active: true, createdAt: new Date().toISOString() };
@@ -860,8 +864,8 @@ export async function handleFirestoreApi(
       };
     }
 
-    // 12. /api/store/order
-    if (cleanUrl === '/api/store/order' && method === 'POST') {
+    // 12. /api/store/orders (also supports /api/store/order)
+    if ((cleanUrl === '/api/store/orders' || cleanUrl === '/api/store/order') && method === 'POST') {
       const bizSnap = await getDocs(collection(firestore, 'businesses'));
       const outSnap = await getDocs(collection(firestore, 'outlets'));
       const allBiz = bizSnap.docs
@@ -871,12 +875,15 @@ export async function handleFirestoreApi(
         .map((d) => d.data() as FirestoreOutlet)
         .filter((o) => !o.businessId.startsWith('biz_demo_'));
 
+      const bSlug = String(body?.businessSlug || '').toLowerCase();
+      const oSlug = String(body?.outletSlug || '').toLowerCase();
+
       const targetBiz =
-        allBiz.find((b) => b.slug === body?.businessSlug || b.id === body?.businessSlug) ||
+        allBiz.find((b) => b.slug?.toLowerCase() === bSlug || b.id === body?.businessSlug) ||
         allBiz[0];
 
       const targetOutlet =
-        allOut.find((o) => (o.slug === body?.outletSlug || o.id === body?.outletSlug) && o.businessId === targetBiz?.id) ||
+        allOut.find((o) => (o.slug?.toLowerCase() === oSlug || o.id === body?.outletSlug) && o.businessId === targetBiz?.id) ||
         allOut.find((o) => o.businessId === targetBiz?.id) ||
         allOut[0];
 
@@ -891,15 +898,37 @@ export async function handleFirestoreApi(
         outletId: targetOutlet ? targetOutlet.id : 'out_main',
         businessName: targetBiz ? targetBiz.name : 'Restaurant',
         outletName: targetOutlet ? targetOutlet.name : 'Dining Room',
-        tableNumber: body?.tableNumber || '1',
-        customerName: body?.customerName || 'Guest',
-        customerPhone: body?.customerPhone,
+        tableNumber: String(body?.tableNumber || '1'),
+        customerName: String(body?.customerName || 'Guest').trim() || 'Guest',
+        customerPhone: body?.customerPhone ? String(body.customerPhone).trim() : '',
         status: 'new',
         total,
-        items: body?.items || [],
+        items: (body?.items || []).map((it: any) => ({
+          itemId: String(it.itemId || ''),
+          name: String(it.name || ''),
+          quantity: Number(it.quantity) || 1,
+          unitPrice: Number(it.unitPrice) || 0,
+          selectedVariant: it.selectedVariant || '',
+          selectedAddOns: Array.isArray(it.selectedAddOns) ? it.selectedAddOns : [],
+        })),
         createdAt: new Date().toISOString(),
       };
-      await setDoc(doc(firestore, 'orders', id), newOrder);
+
+      // Strip any possible undefined values so Firestore setDoc does not throw
+      const cleanDoc = JSON.parse(JSON.stringify(newOrder));
+      await setDoc(doc(firestore, 'orders', id), cleanDoc);
+
+      // Increment business order count
+      if (targetBiz?.id) {
+        try {
+          await updateDoc(doc(firestore, 'businesses', targetBiz.id), {
+            orderCount: (targetBiz.orderCount || 0) + 1,
+          });
+        } catch (e) {
+          console.warn('Failed to update business order count:', e);
+        }
+      }
+
       return newOrder;
     }
   } catch (err) {

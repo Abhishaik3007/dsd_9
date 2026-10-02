@@ -540,8 +540,8 @@ router.get("/store/:business/:outlet/:table", async (req, res) => {
   );
 });
 
-// /store/order
-router.post("/store/order", async (req, res) => {
+// /store/orders (also supports /store/order)
+router.post(["/store/orders", "/store/order"], async (req, res) => {
   const parsed = PlaceStoreOrderBody.safeParse(req.body);
   if (!parsed.success) {
     res.status(400).json({ error: parsed.error.message });

@@ -63,7 +63,15 @@ export function Storefront() {
         setCart([]);
         setLocation('/order-confirmation');
       },
-      onError: () => setFormError('We couldn’t send your order just yet. Please check your connection and try again.'),
+      onError: (err: any) => {
+        console.error('[Store Order Placement Error]:', err);
+        const msg = err?.data?.error || err?.message;
+        setFormError(
+          msg && typeof msg === 'string' && !msg.includes('fetch') && !msg.includes('JSON') && msg.length < 120
+            ? msg
+            : 'We couldn’t send your order just yet. Please check your connection and try again.'
+        );
+      },
     });
   }
 
