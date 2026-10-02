@@ -25,10 +25,28 @@ export function Storefront() {
   const [selected, setSelected] = useState<MenuItem | null>(null);
   const [checkoutOpen, setCheckoutOpen] = useState(false);
   const [formError, setFormError] = useState('');
+  const [phoneInput, setPhoneInput] = useState('');
   const data = menu.data;
   const filtered = useMemo(() => !data ? [] : data.items.filter((item) => item.available && (category === 'all' || item.categoryId === category)), [data, category]);
   const total = cart.reduce((sum, item) => sum + item.unitPrice * item.quantity, 0);
   const totalQuantity = cart.reduce((sum, item) => sum + item.quantity, 0);
+
+  function getItemCount(itemId: string) {
+    return cart.filter((entry) => entry.itemId === itemId).reduce((sum, entry) => sum + entry.quantity, 0);
+  }
+
+  function decrementItem(itemId: string) {
+    const revIndex = [...cart].reverse().findIndex((entry) => entry.itemId === itemId);
+    if (revIndex === -1) return;
+    const actualIndex = cart.length - 1 - revIndex;
+    const target = cart[actualIndex];
+    if (!target) return;
+    if (target.quantity > 1) {
+      setCart((prev) => prev.map((entry, idx) => idx === actualIndex ? { ...entry, quantity: entry.quantity - 1 } : entry));
+    } else {
+      setCart((prev) => prev.filter((_, idx) => idx !== actualIndex));
+    }
+  }
 
   function addToCart(item: MenuItem, form?: HTMLFormElement) {
     const selection = form ? new FormData(form) : null;
@@ -50,10 +68,22 @@ export function Storefront() {
   function submitOrder(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault(); setFormError('');
     const form = new FormData(event.currentTarget);
+    const customerName = String(form.get('customerName') || '').trim();
+    const cleanPhone = (phoneInput || String(form.get('customerPhone') || '')).replace(/\D/g, '');
+
+    if (!customerName) {
+      setFormError('Please enter your name.');
+      return;
+    }
+    if (cleanPhone.length !== 10) {
+      setFormError('Please enter a valid 10-digit mobile number.');
+      return;
+    }
+
     const payload = {
       businessSlug: business, outletSlug: outlet, tableNumber: table,
-      customerName: String(form.get('customerName') || '').trim(),
-      customerPhone: String(form.get('customerPhone') || '').trim() || undefined,
+      customerName,
+      customerPhone: cleanPhone,
       items: cart.map(({ key: _key, ...line }) => line),
     };
     placeOrder.mutate({ data: payload }, {
@@ -93,7 +123,52 @@ export function Storefront() {
             {filtered.length ? <div className="space-y-3">{filtered.map((item) => <article key={item.id} className="surface flex items-center gap-3 p-3 sm:gap-4 sm:p-4" data-testid={`store-item-${item.id}`}>
               <div className="grid h-[76px] w-[76px] shrink-0 place-items-center overflow-hidden rounded-[15px] bg-[#e8eee7] sm:h-[88px] sm:w-[88px]">{item.imageUrl ? <img src={item.imageUrl} alt={item.name} className="h-full w-full object-cover" /> : <Utensils size={21} className="text-[#8ba697]" />}</div>
               <div className="min-w-0 flex-1"><p className="text-[13px] font-bold text-[#32485a]">{item.name}</p><p className="mt-1 line-clamp-2 text-[10px] leading-4 text-[#849096]">{item.description || item.categoryName}</p><p className="mt-2 font-mono text-[11px] font-semibold text-[#395165]">{formatMoney(item.price)}</p></div>
-              <button onClick={() => item.variants.length || item.addOns.length ? setSelected(item) : addToCart(item)} aria-label={`Add ${item.name} to your order`} data-testid={`button-add-store-item-${item.id}`} className="grid h-9 w-9 shrink-0 place-items-center rounded-xl bg-[#e3f0e9] text-[#16806e] transition-all hover:scale-105 hover:bg-[#16806e] hover:text-white">{item.variants.length || item.addOns.length ? <span className="text-[10px] font-bold">Add</span> : <Plus size={17} />}</button>
+              {(() => {
+                const count = getItemCount(item.id);
+                if (count > 0) {
+                  return (
+                    <div className="flex items-center gap-1 rounded-xl border border-[#bfe0d0] bg-[#f0f8f4] p-1 shadow-2xs">
+                      <button
+                        type="button"
+                        onClick={() => decrementItem(item.id)}
+                        aria-label={`Remove one ${item.name}`}
+                        className="grid h-7 w-7 place-items-center rounded-lg bg-white text-[#16806e] shadow-2xs hover:bg-[#e1f1e8] active:scale-95 transition-all cursor-pointer"
+                      >
+                        <Minus size={13} strokeWidth={2.5} />
+                      </button>
+                      <span className="min-w-5 text-center font-mono text-[11px] font-bold text-[#16806e]">
+                        {count}
+                      </span>
+                      <button
+                        type="button"
+                        onClick={() => item.variants.length || item.addOns.length ? setSelected(item) : addToCart(item)}
+                        aria-label={`Add another ${item.name}`}
+                        className="grid h-7 w-7 place-items-center rounded-lg bg-[#16806e] text-white shadow-2xs hover:bg-[#126b5c] active:scale-95 transition-all cursor-pointer"
+                      >
+                        <Plus size={13} strokeWidth={2.5} />
+                      </button>
+                    </div>
+                  );
+                }
+                return (
+                  <button
+                    type="button"
+                    onClick={() => item.variants.length || item.addOns.length ? setSelected(item) : addToCart(item)}
+                    aria-label={`Add ${item.name} to your order`}
+                    data-testid={`button-add-store-item-${item.id}`}
+                    className="flex h-9 items-center justify-center gap-1 rounded-xl bg-[#e3f0e9] px-3 text-[#16806e] font-semibold transition-all hover:scale-105 hover:bg-[#16806e] hover:text-white cursor-pointer active:scale-95"
+                  >
+                    {item.variants.length || item.addOns.length ? (
+                      <span className="text-[11px] font-bold">Add +</span>
+                    ) : (
+                      <>
+                        <Plus size={15} strokeWidth={2.5} />
+                        <span className="text-[11px] font-bold">Add</span>
+                      </>
+                    )}
+                  </button>
+                );
+              })()}
             </article>)}</div> : <div className="rounded-[18px] border border-dashed border-[#dcd9d0] bg-[#fbfaf6] px-6 py-12 text-center"><p className="font-display font-bold">Nothing on the menu in this section.</p><p className="mt-1 text-[11px] text-[#849095]">Try another category.</p></div>}
           </div>
           <aside className="hidden lg:block"><div className="surface sticky top-[88px] p-5"><div className="flex items-center justify-between"><h2 className="font-display text-[16px] font-bold">Your order</h2><span className="rounded-full bg-[#f0efe8] px-2 py-1 font-mono text-[9px] text-[#728089]">{totalQuantity} items</span></div>
@@ -109,12 +184,27 @@ export function Storefront() {
       </form></Modal>}
       {checkoutOpen && <Modal title="One last thing." subtitle={`Your order will be sent to ${data.outlet.name}, table ${data.tableNumber}.`} onClose={() => setCheckoutOpen(false)}><form onSubmit={submitOrder} className="space-y-4">
         <div className="max-h-[220px] overflow-y-auto rounded-[13px] bg-[#f5f4ee] px-3">{cart.map((line) => <CartLineRow key={line.key} line={line} decrement={() => alterQuantity(line, -1)} increment={() => alterQuantity(line, 1)} />)}</div>
-        <Field label="Your name"><input className="field" name="customerName" autoComplete="name" required placeholder="How should we find you?" data-testid="input-customer-name" /></Field>
-        <Field label="Phone number" hint="Optional, only if we need to find you"><input className="field" name="customerPhone" type="tel" autoComplete="tel" placeholder="(555) 015-0284" data-testid="input-customer-phone" /></Field>
+        <Field label="Your name" hint="Required"><input className="field" name="customerName" autoComplete="name" required placeholder="How should we find you?" data-testid="input-customer-name" /></Field>
+        <Field label="Mobile number" hint="Required (10 digits)">
+          <input
+            className="field font-mono text-[13px] tracking-wide"
+            name="customerPhone"
+            type="tel"
+            inputMode="numeric"
+            autoComplete="tel"
+            required
+            maxLength={10}
+            minLength={10}
+            pattern="[0-9]{10}"
+            placeholder="10-digit mobile number"
+            value={phoneInput}
+            onChange={(e) => setPhoneInput(e.target.value.replace(/\D/g, '').slice(0, 10))}
+            data-testid="input-customer-phone"
+          />
+        </Field>
         <div className="flex items-center justify-between border-t border-[#ebe8df] pt-3"><span className="text-[11px] text-[#74828a]">Order total</span><span className="font-display text-[19px] font-bold">{formatMoney(total)}</span></div>
         {formError && <p className="rounded-lg bg-[#fae9e6] px-3 py-2 text-[11px] text-[#a84e45]">{formError}</p>}
         <SubmitButton pending={placeOrder.isPending} className="w-full">Place order <ArrowRight size={15} /></SubmitButton>
-        <p className="text-center text-[9px] leading-4 text-[#99a2a1]">No payment is taken here. Your team will take care of you.</p>
       </form></Modal>}
     </>}</QueryState>
     <footer className="mx-auto flex max-w-[1100px] items-center justify-between border-t border-[#e8e5dd] px-4 py-5 text-[9px] text-[#9aa3a1] sm:px-7"><span>Powered by Tablewave</span><span>Good service, in motion.</span></footer>
