@@ -371,15 +371,13 @@ export async function handleFirestoreApi(
             const b = bDoc.data() as FirestoreBusiness;
             const exp = b.expiresAt ? new Date(b.expiresAt).getTime() : null;
             const isExp = exp != null && !isNaN(exp) && exp < Date.now();
-            if (b.status === 'suspended' || b.status === 'inactive' || isExp) {
-              return {
-                ...user,
-                status: 'suspended',
-                businessStatus: b.status,
-                isExpired: isExp,
-                expiresAt: b.expiresAt,
-              };
-            }
+            return {
+              ...user,
+              status: user.status || 'active',
+              businessStatus: b.status,
+              isExpired: isExp,
+              expiresAt: b.expiresAt,
+            };
           }
         } catch (e) {
           console.warn('[Firestore] Error verifying business status in /api/me:', e);

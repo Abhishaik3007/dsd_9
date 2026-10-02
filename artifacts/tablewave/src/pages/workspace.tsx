@@ -1464,6 +1464,97 @@ function OutletsPage({ businessId, businesses, outlets, loading, error, retry, c
   </>;
 }
 
+function OrdersDisabledPage({
+  isBizExpired,
+  isBizSuspended,
+  business,
+  onRefresh,
+}: {
+  isBizExpired: boolean;
+  isBizSuspended: boolean;
+  business?: Business | null;
+  onRefresh: () => void;
+}) {
+  return (
+    <>
+      <PageTitle
+        eyebrow="Service / live orders"
+        title="Live orders paused."
+        description="Incoming guest table orders and kitchen feeds are offline."
+        action={
+          <div className="flex items-center gap-2 rounded-[11px] bg-[#fae8e6] px-3 py-2 text-[10px] font-semibold text-[#b8382c]">
+            <span className="relative flex h-2 w-2">
+              <span className="relative inline-flex h-2 w-2 rounded-full bg-[#b8382c]" />
+            </span>
+            {isBizExpired ? 'Subscription Expired' : 'Service Suspended'}
+          </div>
+        }
+      />
+
+      <div className="surface mx-auto max-w-2xl p-7 sm:p-9 text-center border border-[#e8e4da] rounded-[24px] shadow-sm my-6">
+        <div className={`mx-auto mb-4 grid h-14 w-14 place-items-center rounded-2xl ${isBizExpired ? 'bg-[#fff2e2] text-[#c2621f]' : 'bg-[#fae8e6] text-[#b8382c]'}`}>
+          {isBizExpired ? <CalendarX size={28} /> : <ShieldAlert size={28} />}
+        </div>
+
+        <span className={`inline-block rounded-full px-3 py-1 font-mono text-[10px] font-bold uppercase tracking-wider ${isBizExpired ? 'bg-[#fff0df] text-[#b45d1b]' : 'bg-[#fae6e3] text-[#b3372c]'}`}>
+          {isBizExpired ? 'Subscription Ended' : 'Account Suspended'}
+        </span>
+
+        <h2 className="mt-3 font-display text-[22px] font-bold text-[#2d4254]">
+          {isBizExpired ? 'Live Orders Offline — Subscription Expired' : 'Live Orders Suspended'}
+        </h2>
+
+        <p className="mt-2 text-[12px] leading-relaxed text-[#73828c] max-w-lg mx-auto">
+          {isBizExpired ? (
+            <>
+              The subscription for <strong className="text-[#3a4f61]">{business?.name || 'this venue'}</strong> ended on{' '}
+              <strong className="text-[#3a4f61]">
+                {business?.expiresAt ? new Date(business.expiresAt).toLocaleDateString(undefined, { year: 'numeric', month: 'long', day: 'numeric' }) : 'recently'}
+              </strong>. Guests scanning QR codes cannot submit orders, and new live orders will not appear here.
+            </>
+          ) : (
+            <>
+              Online order processing for <strong className="text-[#3a4f61]">{business?.name || 'this venue'}</strong> has been temporarily suspended by the platform administrator.
+            </>
+          )}
+        </p>
+
+        <div className="my-6 rounded-2xl bg-[#f7f6f0] p-5 text-left border border-[#ebe7dc] max-w-md mx-auto">
+          <p className="text-[11px] font-semibold text-[#485c6c] mb-2">Workspace Availability:</p>
+          <ul className="space-y-2 text-[11px] text-[#6d7c86]">
+            <li className="flex items-center gap-2 text-[#28745f]">
+              <CheckCircle2 size={14} className="shrink-0 text-[#16806e]" />
+              <span><strong>Menu & Dishes:</strong> Fully accessible to view and update.</span>
+            </li>
+            <li className="flex items-center gap-2 text-[#28745f]">
+              <CheckCircle2 size={14} className="shrink-0 text-[#16806e]" />
+              <span><strong>Outlets & QR:</strong> Accessible to view table configurations.</span>
+            </li>
+            <li className="flex items-center gap-2 text-[#28745f]">
+              <CheckCircle2 size={14} className="shrink-0 text-[#16806e]" />
+              <span><strong>Past Sales Analytics:</strong> Accessible for reporting.</span>
+            </li>
+            <li className="flex items-center gap-2 text-[#b8382c]">
+              <X size={14} className="shrink-0 text-[#b8382c]" />
+              <span><strong>Live Orders Feed:</strong> Disabled until renewed.</span>
+            </li>
+          </ul>
+        </div>
+
+        <div className="flex flex-wrap items-center justify-center gap-3 pt-2">
+          <button
+            type="button"
+            onClick={onRefresh}
+            className="flex items-center gap-1.5 rounded-xl bg-[#16806e] px-5 py-2.5 text-[12px] font-bold text-white shadow-sm hover:bg-[#126b5c] transition-all cursor-pointer"
+          >
+            <RefreshCw size={14} /> Refresh Status
+          </button>
+        </div>
+      </div>
+    </>
+  );
+}
+
 const orderStatuses = ['new', 'preparing', 'ready', 'completed', 'cancelled'];
 function OrdersPage({ orders, loading, error, retry, client }: { orders: Order[]; loading: boolean; error: boolean; retry: () => void; client: ReturnType<typeof useQueryClient> }) {
   const [filter, setFilter] = useState('all'); const [search, setSearch] = useState('');
@@ -1798,89 +1889,6 @@ export function Workspace() {
     );
   }
 
-  if (isLockedOut) {
-    return (
-      <div className="min-h-[100dvh] bg-[#f5f3ed] flex flex-col">
-        <header className="border-b border-[#e3dfd3] bg-[#fcfbf8] px-6 py-4">
-          <div className="max-w-4xl mx-auto flex items-center justify-between">
-            <BrandMark />
-            <button
-              onClick={() => void signOut({ redirectUrl: '/sign-in' })}
-              className="flex items-center gap-1.5 rounded-lg border border-[#e2ded5] bg-white px-3 py-1.5 text-[11px] font-semibold text-[#5a6974] hover:bg-[#f6f5f0] transition-colors cursor-pointer"
-            >
-              <LogOut size={13} /> Sign out
-            </button>
-          </div>
-        </header>
-
-        <main className="flex-1 flex items-center justify-center p-6">
-          <div className="max-w-md w-full surface p-7 sm:p-8 text-center shadow-lg border border-[#e3ded2] rounded-[24px]">
-            <div className={`mx-auto mb-4 grid h-14 w-14 place-items-center rounded-2xl ${isBizExpired ? 'bg-[#fff2e2] text-[#c2621f]' : 'bg-[#fae8e6] text-[#b8382c]'}`}>
-              {isBizExpired ? <CalendarX size={28} /> : <ShieldAlert size={28} />}
-            </div>
-
-            <span className={`inline-block rounded-full px-3 py-1 font-mono text-[10px] font-bold uppercase tracking-wider ${isBizExpired ? 'bg-[#fff0df] text-[#b45d1b]' : 'bg-[#fae6e3] text-[#b3372c]'}`}>
-              {isBizExpired ? 'Subscription Expired' : 'Venue Suspended'}
-            </span>
-
-            <h1 className="mt-3 font-display text-[22px] font-bold text-[#2d4254]">
-              {isBizExpired ? 'Subscription Period Ended' : 'Venue Access Suspended'}
-            </h1>
-
-            <p className="mt-2 text-[12px] leading-relaxed text-[#73828c]">
-              {isBizExpired ? (
-                <>
-                  Your plan for <strong className="text-[#3a4f61]">{activeBusiness?.name || user.businessName || 'this venue'}</strong> expired on{' '}
-                  <strong className="text-[#3a4f61]">{activeBusiness?.expiresAt ? new Date(activeBusiness.expiresAt).toLocaleDateString(undefined, { year: 'numeric', month: 'long', day: 'numeric' }) : 'recently'}</strong>.
-                </>
-              ) : (
-                <>
-                  Operational access for <strong className="text-[#3a4f61]">{activeBusiness?.name || user.businessName || 'this venue'}</strong> has been restricted by the platform administrator.
-                </>
-              )}
-            </p>
-
-            <div className="my-5 rounded-xl bg-[#f7f6f0] p-4 text-left border border-[#ece8de]">
-              <p className="text-[11px] font-semibold text-[#485c6c] mb-1">What this means for your venue:</p>
-              <ul className="space-y-1.5 text-[11px] text-[#6d7c86]">
-                <li className="flex items-start gap-2">
-                  <span className="text-[#b8382c] font-bold">•</span>
-                  <span>Guests scanning table QR codes cannot place orders.</span>
-                </li>
-                <li className="flex items-start gap-2">
-                  <span className="text-[#b8382c] font-bold">•</span>
-                  <span>The live orders kitchen display is paused.</span>
-                </li>
-                <li className="flex items-start gap-2">
-                  <span className="text-[#b8382c] font-bold">•</span>
-                  <span>Menu and outlet management is locked until reactivated.</span>
-                </li>
-              </ul>
-            </div>
-
-            <div className="flex flex-col gap-2 pt-2">
-              <button
-                onClick={() => {
-                  void businesses.refetch();
-                  void current.refetch();
-                }}
-                className="flex items-center justify-center gap-1.5 rounded-xl bg-[#16806e] py-2.5 text-[12px] font-bold text-white shadow-sm hover:bg-[#126b5c] transition-all cursor-pointer"
-              >
-                <RefreshCw size={14} /> Refresh Status
-              </button>
-              <button
-                onClick={() => void signOut({ redirectUrl: '/sign-in' })}
-                className="rounded-xl border border-[#dedad0] bg-transparent py-2 text-[11px] font-semibold text-[#6d7c86] hover:bg-[#eae8df] transition-all cursor-pointer"
-              >
-                Sign in with another account
-              </button>
-            </div>
-          </div>
-        </main>
-      </div>
-    );
-  }
-
   if (!isRoutePermitted) {
     const fallback = ROLE_DEFAULT_ROUTE[user.role] || '/dashboard';
     return <Redirect to={fallback} />;
@@ -1897,13 +1905,52 @@ export function Workspace() {
   }[route] || { loading: dashboard.isLoading, error: dashboard.isError, retry: () => void dashboard.refetch() };
 
   return <WorkspaceShell user={user}>
+    {Boolean(!user.isSuperAdmin && (isBizExpired || isBizSuspended) && route !== 'orders') && (
+      <div className="mb-5 flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-[#f3c6be] bg-[#fff5f4] p-4 text-[#9c362a] shadow-xs">
+        <div className="flex items-center gap-3">
+          <div className="grid h-8 w-8 shrink-0 place-items-center rounded-xl bg-[#fae5e2] text-[#b8382c]">
+            <AlertTriangle size={16} />
+          </div>
+          <div className="text-[11px] leading-snug">
+            <strong className="font-bold text-[#35495a]">
+              {isBizExpired ? 'Subscription Ended' : 'Service Suspended'}:
+            </strong>{' '}
+            <span className="text-[#6d7c86]">
+              {isBizExpired
+                ? `Your subscription for ${activeBusiness?.name || 'this venue'} expired on ${activeBusiness?.expiresAt ? new Date(activeBusiness.expiresAt).toLocaleDateString() : 'recently'}. Live table ordering is paused. Menu, outlet, and sales tools remain accessible.`
+                : 'Live table ordering is suspended for this venue. Other workspace management tools remain accessible.'}
+            </span>
+          </div>
+        </div>
+        <div className="flex items-center gap-2">
+          <Link href="/orders" className="text-[11px] font-bold text-[#b8382c] hover:underline">
+            View Live Orders Status →
+          </Link>
+        </div>
+      </div>
+    )}
+
     {route === 'dashboard' && <Overview user={user} dashboard={dashboard.data} loading={loadPage.loading} error={loadPage.error} retry={loadPage.retry} orders={orders.data || []} businesses={businesses.data || []} plans={plans.data || []} />}
     {route === 'businesses' && <BusinessesPage businesses={businesses.data || []} plans={plans.data || []} loading={loadPage.loading} error={loadPage.error} retry={loadPage.retry} create={createBusiness} update={updateBusiness} createPending={createBusiness.isPending} updatePending={updateBusiness.isPending} client={client} />}
     {route === 'team' && <TeamPage members={team.data || []} loading={loadPage.loading} error={loadPage.error} retry={loadPage.retry} invite={invite} pending={invite.isPending} user={user} client={client} />}
     {route === 'plans' && <PlansPage plans={plans.data || []} loading={loadPage.loading} error={loadPage.error} retry={loadPage.retry} create={createPlan} pending={createPlan.isPending} client={client} />}
     {route === 'menu' && <MenuPage businessId={businessId} categories={categories.data || []} items={items.data || []} loading={loadPage.loading} error={loadPage.error} retry={loadPage.retry} client={client} />}
     {route === 'outlets' && <OutletsPage businessId={businessId} businesses={businesses.data || []} outlets={outlets.data || []} loading={loadPage.loading} error={loadPage.error} retry={loadPage.retry} client={client} />}
-    {route === 'orders' && <OrdersPage orders={orders.data || []} loading={loadPage.loading} error={loadPage.error} retry={loadPage.retry} client={client} />}
+    {route === 'orders' && (
+      (!user.isSuperAdmin && (isBizExpired || isBizSuspended)) ? (
+        <OrdersDisabledPage
+          isBizExpired={isBizExpired}
+          isBizSuspended={isBizSuspended}
+          business={activeBusiness}
+          onRefresh={() => {
+            void businesses.refetch();
+            void orders.refetch();
+          }}
+        />
+      ) : (
+        <OrdersPage orders={orders.data || []} loading={loadPage.loading} error={loadPage.error} retry={loadPage.retry} client={client} />
+      )
+    )}
     {route === 'analytics' && <AnalyticsPage user={user} analytics={analytics.data} loading={loadPage.loading} error={loadPage.error} retry={loadPage.retry} />}
   </WorkspaceShell>;
 }

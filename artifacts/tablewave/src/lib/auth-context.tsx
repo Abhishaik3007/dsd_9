@@ -203,21 +203,6 @@ export function TablewaveAuthProvider({ children }: { children: ReactNode }) {
             throw new Error('Invalid email or password. Please check your credentials.');
           }
 
-          let finalStatus: 'active' | 'suspended' | 'pending' = (docData.status as any) || 'active';
-          if (docData.businessId && docData.role !== 'super_admin' && !docData.isSuperAdmin) {
-            try {
-              const bDoc = await getDoc(doc(firestore, 'businesses', docData.businessId));
-              if (bDoc.exists()) {
-                const b = bDoc.data();
-                const exp = b.expiresAt ? new Date(b.expiresAt).getTime() : null;
-                const isExp = exp != null && !isNaN(exp) && exp < Date.now();
-                if (b.status === 'suspended' || b.status === 'inactive' || isExp) {
-                  finalStatus = 'suspended';
-                }
-              }
-            } catch {}
-          }
-
           const authUser: AuthUser = {
             id: docData.id || snap.docs[0].id,
             email: docData.email,
@@ -226,7 +211,7 @@ export function TablewaveAuthProvider({ children }: { children: ReactNode }) {
             isSuperAdmin: docData.role === 'super_admin' || docData.isSuperAdmin === true,
             businessId: docData.businessId || null,
             businessName: docData.businessName || null,
-            status: finalStatus,
+            status: docData.status || 'active',
           };
           setAuthSession(`user_${authUser.id}`, authUser, 'credentials');
           return;
