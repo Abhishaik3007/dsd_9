@@ -391,21 +391,67 @@ export async function handleFirestoreApi(
       }
       if (method === 'POST') {
         const id = `biz_${Date.now().toString().slice(-6)}`;
+        const venueName = (body?.name || 'New Venue').trim();
+        const ownerEmail = (body?.ownerEmail || '').trim().toLowerCase();
+        const cleanSlug = venueName.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '') || 'venue';
+
         const newBiz: FirestoreBusiness = {
           id,
-          name: body?.name || 'New Venue',
-          slug: (body?.name || 'venue').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '') || 'venue',
+          name: venueName,
+          slug: cleanSlug,
           type: body?.type || 'Restaurant',
           status: 'active',
-          ownerEmail: body?.ownerEmail || user.email || 'owner@venue.com',
+          ownerEmail: ownerEmail || 'owner@venue.com',
           planId: body?.planId || 'plan_growth',
-          planName: 'Growth',
+          planName: body?.planId === 'plan_enterprise' ? 'Enterprise' : body?.planId === 'plan_starter' ? 'Starter' : 'Growth',
           outletCount: 1,
           orderCount: 0,
           expiresAt: body?.expiresAt || null,
           createdAt: new Date().toISOString(),
         };
         await setDoc(doc(firestore, 'businesses', id), newBiz);
+
+        // 1. Provision default Main Outlet
+        const outId = `out_${id}_main`;
+        await setDoc(doc(firestore, 'outlets', outId), {
+          id: outId,
+          businessId: id,
+          name: 'Main Dining Room',
+          slug: 'main',
+          address: 'Table Service Area',
+          active: true,
+          tableCount: 12,
+          createdAt: new Date().toISOString(),
+        });
+
+        // 2. Provision default Chef Specials Category
+        const catId = `cat_${id}_specials`;
+        await setDoc(doc(firestore, 'categories', catId), {
+          id: catId,
+          businessId: id,
+          name: 'Chef Specialties',
+          sortOrder: 1,
+          createdAt: new Date().toISOString(),
+        });
+
+        // 3. Provision Venue Owner account in users collection so they can log in immediately
+        if (ownerEmail) {
+          const ownerUid = `usr_${id}`;
+          const ownerUser = {
+            id: ownerUid,
+            email: ownerEmail,
+            name: `${venueName} Admin`,
+            role: 'business_admin' as const,
+            userType: 'business_admin' as const,
+            status: 'active' as const,
+            businessId: id,
+            businessName: venueName,
+            isSuperAdmin: false,
+            createdAt: new Date().toISOString(),
+          };
+          await setDoc(doc(firestore, 'users', ownerUid), ownerUser, { merge: true });
+        }
+
         return newBiz;
       }
     }

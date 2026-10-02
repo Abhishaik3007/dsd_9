@@ -8,7 +8,7 @@ import {
   firestore,
   isSuperAdminEmail,
 } from './firebase';
-import { doc, setDoc } from 'firebase/firestore';
+import { doc, setDoc, collection, query, where, getDocs } from 'firebase/firestore';
 import { handleFirestoreApi, ensureFirestoreSeeded } from './firestore-service';
 
 export interface AuthUser {
@@ -136,6 +136,9 @@ export function TablewaveAuthProvider({ children }: { children: ReactNode }) {
   };
 
   const loginWithEmail = async (email: string, pass: string) => {
+    const cleanEmail = email.trim().toLowerCase();
+    const isSuper = isSuperAdminEmail(cleanEmail);
+
     if (isFirebaseConfigured) {
       try {
         const data = await loginWithFirebaseAuth(email, pass);
@@ -147,25 +150,54 @@ export function TablewaveAuthProvider({ children }: { children: ReactNode }) {
           throw new Error('Invalid email or password. Please check your credentials.');
         }
         if (fbErr?.code === 'auth/user-not-found') {
-          throw new Error('No account found with this email. Please create an account.');
+          throw new Error('No account found for this email. Business accounts must be provisioned by the Platform Super Admin.');
         }
       }
     }
 
-    // Resilient fallback for local testing
-    const isSuper = isSuperAdminEmail(email);
-    const cleanId = Date.now().toString().slice(-6);
-    const fallbackUser: AuthUser = {
-      id: isSuper ? 'usr_superadmin' : `usr_${cleanId}`,
-      email,
-      name: isSuper ? 'Abhishek Kumar (Super Admin)' : email.split('@')[0],
-      role: isSuper ? 'super_admin' : 'business_admin',
-      isSuperAdmin: isSuper,
-      businessId: isSuper ? null : `biz_${cleanId}`,
-      businessName: isSuper ? 'Platform' : `${email.split('@')[0]}'s Venue`,
-      status: 'active',
-    };
-    setAuthSession(isSuper ? 'user_superadmin' : `user_${cleanId}`, fallbackUser, 'credentials');
+    // 1. If Super Admin email, authenticate as platform super admin
+    if (isSuper) {
+      const superUser: AuthUser = {
+        id: 'usr_superadmin_abhishaik',
+        email: cleanEmail,
+        name: 'Abhishek Kumar (Super Admin)',
+        role: 'super_admin',
+        isSuperAdmin: true,
+        businessId: null,
+        businessName: 'Platform',
+        status: 'active',
+      };
+      setAuthSession('user_superadmin', superUser, 'credentials');
+      return;
+    }
+
+    // 2. Query Firestore users collection for account provisioned by Super Admin
+    if (firestore) {
+      try {
+        const q = query(collection(firestore, 'users'), where('email', '==', cleanEmail));
+        const snap = await getDocs(q);
+        if (!snap.empty) {
+          const docData = snap.docs[0].data();
+          const authUser: AuthUser = {
+            id: docData.id || snap.docs[0].id,
+            email: docData.email,
+            name: docData.name || cleanEmail.split('@')[0],
+            role: (docData.role || 'business_admin') as any,
+            isSuperAdmin: docData.role === 'super_admin' || docData.isSuperAdmin === true,
+            businessId: docData.businessId || null,
+            businessName: docData.businessName || null,
+            status: docData.status || 'active',
+          };
+          setAuthSession(`user_${authUser.id}`, authUser, 'credentials');
+          return;
+        }
+      } catch (err) {
+        console.warn('Could not query Firestore users:', err);
+      }
+    }
+
+    // 3. If neither Super Admin nor provisioned in Firestore:
+    throw new Error('No account found for this email. Business accounts are created exclusively by the Platform Super Admin.');
   };
 
   const registerWithEmail = async (

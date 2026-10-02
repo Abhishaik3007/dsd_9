@@ -10,7 +10,7 @@ import {
   type Auth,
   type User as FirebaseUser,
 } from 'firebase/auth';
-import { getFirestore, doc, getDoc, setDoc, type Firestore } from 'firebase/firestore';
+import { getFirestore, doc, getDoc, setDoc, collection, query, where, getDocs, type Firestore } from 'firebase/firestore';
 
 const firebaseConfig = {
   apiKey: import.meta.env.VITE_FIREBASE_API_KEY || "AIzaSyDFfDuS_k0iuykgaIMZ79BOfaVJVezLqqU",
@@ -64,22 +64,86 @@ async function syncFirebaseUserDoc(
   role = 'business_admin',
   venueName?: string
 ) {
-  const isSuper = role === 'super_admin' || isSuperAdminEmail(user.email);
-  const resolvedRole = isSuper ? 'super_admin' : role;
-  const cleanUid = user.uid.replace(/[^a-zA-Z0-9]/g, '').slice(0, 10) || Date.now().toString().slice(-6);
-  const bizId = isSuper ? null : `biz_${cleanUid}`;
-  const bizName = isSuper ? 'Platform' : (venueName?.trim() || `${customName?.trim() || user.displayName || user.email?.split('@')[0] || 'My'}'s Venue`);
+  const cleanEmail = (user.email || '').toLowerCase().trim();
+  const isSuper = role === 'super_admin' || isSuperAdminEmail(cleanEmail);
+
+  if (isSuper) {
+    const superProfile = {
+      id: user.uid,
+      email: cleanEmail || 'abhishaik3007@gmail.com',
+      name: customName || user.displayName || 'Abhishek Kumar (Super Admin)',
+      role: 'super_admin' as const,
+      userType: 'super_admin' as const,
+      status: 'active' as const,
+      businessId: null,
+      businessName: 'Platform',
+      isSuperAdmin: true,
+      createdAt: new Date().toISOString(),
+    };
+    if (firestore) {
+      try {
+        await setDoc(doc(firestore, 'users', user.uid), superProfile, { merge: true });
+      } catch (err) {
+        console.warn('[Firestore] Could not write super admin profile:', err);
+      }
+    }
+    return superProfile;
+  }
+
+  // Non-SuperAdmin: find provisioned business or provisioned user doc
+  let matchedBizId: string | null = null;
+  let matchedBizName: string | null = venueName?.trim() || null;
+  let matchedRole: 'business_admin' | 'staff' = role === 'staff' ? 'staff' : 'business_admin';
+
+  if (firestore) {
+    try {
+      // 1. Check if user profile already exists by user.uid
+      const userRef = doc(firestore, 'users', user.uid);
+      const userSnap = await getDoc(userRef);
+      if (userSnap.exists()) {
+        const udata = userSnap.data();
+        if (udata.businessId) matchedBizId = udata.businessId;
+        if (udata.businessName) matchedBizName = udata.businessName;
+        if (udata.role) matchedRole = udata.role;
+      }
+
+      // 2. Check if Super Admin provisioned an account for this email
+      if (!matchedBizId && cleanEmail) {
+        const userQ = query(collection(firestore, 'users'), where('email', '==', cleanEmail));
+        const userDocs = await getDocs(userQ);
+        if (!userDocs.empty) {
+          const provUser = userDocs.docs[0].data();
+          matchedBizId = provUser.businessId || null;
+          matchedBizName = provUser.businessName || null;
+          matchedRole = provUser.role || matchedRole;
+        }
+      }
+
+      // 3. Check if Super Admin created a business with this ownerEmail
+      if (!matchedBizId && cleanEmail) {
+        const bizQ = query(collection(firestore, 'businesses'), where('ownerEmail', '==', cleanEmail));
+        const bizDocs = await getDocs(bizQ);
+        if (!bizDocs.empty) {
+          const provBiz = bizDocs.docs[0].data();
+          matchedBizId = provBiz.id || null;
+          matchedBizName = provBiz.name || null;
+        }
+      }
+    } catch (err) {
+      console.warn('[Firestore] Error resolving user business:', err);
+    }
+  }
 
   const userProfile = {
     id: user.uid,
-    email: user.email || (isSuper ? 'Abhishaik3007@gmail.com' : 'user@venue.com'),
-    name: customName || user.displayName || user.email?.split('@')[0] || (isSuper ? 'Abhishek Kumar (Super Admin)' : resolvedRole === 'staff' ? 'Staff Member' : 'Venue Owner'),
-    role: resolvedRole,
-    userType: resolvedRole,
+    email: cleanEmail || 'user@venue.com',
+    name: customName || user.displayName || cleanEmail.split('@')[0] || (matchedRole === 'staff' ? 'Staff Member' : 'Venue Owner'),
+    role: matchedRole,
+    userType: matchedRole,
     status: 'active' as const,
-    businessId: bizId,
-    businessName: bizName,
-    isSuperAdmin: isSuper,
+    businessId: matchedBizId,
+    businessName: matchedBizName || (cleanEmail ? `${cleanEmail.split('@')[0]}'s Venue` : 'My Venue'),
+    isSuperAdmin: false,
     createdAt: new Date().toISOString(),
   };
 
@@ -87,54 +151,8 @@ async function syncFirebaseUserDoc(
     try {
       const ref = doc(firestore, 'users', user.uid);
       await setDoc(ref, userProfile, { merge: true });
-
-      // Provision genuine unique business, outlet, and category for this genuine account
-      if (bizId) {
-        const bizRef = doc(firestore, 'businesses', bizId);
-        const bizSnap = await getDoc(bizRef);
-        if (!bizSnap.exists()) {
-          const newBiz = {
-            id: bizId,
-            name: bizName,
-            slug: bizName.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '') || 'venue',
-            type: 'Restaurant',
-            status: 'active',
-            ownerEmail: user.email || '',
-            planId: 'plan_growth',
-            planName: 'Growth',
-            outletCount: 1,
-            orderCount: 0,
-            expiresAt: null,
-            createdAt: new Date().toISOString(),
-          };
-          await setDoc(bizRef, newBiz);
-
-          // Default outlet for genuine account
-          const outId = `out_${cleanUid}_main`;
-          await setDoc(doc(firestore, 'outlets', outId), {
-            id: outId,
-            businessId: bizId,
-            name: 'Main Dining Room',
-            slug: 'main',
-            address: 'Table Service Area',
-            active: true,
-            tableCount: 12,
-            createdAt: new Date().toISOString(),
-          });
-
-          // Default category for genuine account
-          const catId = `cat_${cleanUid}_specials`;
-          await setDoc(doc(firestore, 'categories', catId), {
-            id: catId,
-            businessId: bizId,
-            name: 'Chef Specialties',
-            sortOrder: 1,
-            createdAt: new Date().toISOString(),
-          });
-        }
-      }
     } catch (err) {
-      console.warn('[Firestore] Could not write user doc, using local session:', err);
+      console.warn('[Firestore] Could not write user doc:', err);
     }
   }
 

@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { useLocation } from 'wouter';
-import { Shield, Sparkles, Store, UtensilsCrossed, Mail, Lock, User, ArrowRight, AlertCircle } from 'lucide-react';
+import { Shield, Sparkles, Store, Mail, Lock, ArrowRight, AlertCircle } from 'lucide-react';
 import { useTablewaveAuth } from '@/lib/auth-context';
 import { BrandMark, Button } from '@/components/shared';
 
@@ -16,17 +16,11 @@ export function AuthCard({
   subtitle = "Sign in to manage your venues, tables, and live orders."
 }: AuthCardProps) {
   const [, setLocation] = useLocation();
-  const { loginAsDemo, loginWithEmail, registerWithEmail } = useTablewaveAuth();
+  const { loginAsDemo, loginWithEmail } = useTablewaveAuth();
 
   const [activeTab, setActiveTab] = useState<'demo' | 'email'>('demo');
-  const [emailMode, setEmailMode] = useState<'signin' | 'signup'>('signin');
-  
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
-  const [name, setName] = useState('');
-  const [venueName, setVenueName] = useState('');
-  const [role, setRole] = useState<'super_admin' | 'business_admin' | 'staff'>('business_admin');
-  
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -53,11 +47,7 @@ export function AuthCard({
     setLoading(true);
     setError(null);
     try {
-      if (emailMode === 'signin') {
-        await loginWithEmail(email, password);
-      } else {
-        await registerWithEmail(email, password, name, role, venueName);
-      }
+      await loginWithEmail(email, password);
       if (onSuccess) onSuccess();
       else setLocation('/dashboard');
     } catch (err: any) {
@@ -183,83 +173,17 @@ export function AuthCard({
         </div>
       )}
 
-      {/* TAB 2: Self-hosted Email / Password */}
+      {/* TAB 2: Secure Email / Password Sign In */}
       {activeTab === 'email' && (
         <form onSubmit={handleEmailAuth} className="mt-6 space-y-4">
-          <div className="flex items-center justify-between">
-            <p className="text-[12px] font-medium text-[#71828f]">
-              {emailMode === 'signin' ? "Don't have an account?" : "Already have an account?"}
+          <div className="rounded-xl border border-[#ded9cc] bg-[#f8f6f0] p-3 text-[11px] leading-relaxed text-[#5c6e7a]">
+            <p className="font-semibold text-[#203147] flex items-center gap-1.5">
+              <span>🔒</span> Super Admin Managed Platform
             </p>
-            <button
-              type="button"
-              onClick={() => setEmailMode(emailMode === 'signin' ? 'signup' : 'signin')}
-              className="font-mono text-[11px] font-semibold text-[#16806e] underline"
-            >
-              {emailMode === 'signin' ? 'Create new account' : 'Sign in instead'}
-            </button>
+            <p className="mt-0.5 text-[10.5px] text-[#71828f]">
+              Business and venue accounts are provisioned exclusively by the Platform Super Admin. Sign in with your assigned credentials.
+            </p>
           </div>
-
-          {emailMode === 'signup' && (
-            <>
-              <div>
-                <label className="block text-[11px] font-semibold text-[#485c6c]">Your Name</label>
-                <div className="mt-1 flex items-center gap-2 rounded-xl border border-[#ded9cc] bg-white px-3 py-2">
-                  <User size={16} className="text-[#96a4af]" />
-                  <input
-                    type="text"
-                    placeholder="Abhishek Kumar"
-                    value={name}
-                    onChange={(e) => setName(e.target.value)}
-                    className="w-full text-[13px] bg-transparent outline-none text-[#203147]"
-                  />
-                </div>
-              </div>
-
-              <div>
-                <label className="block text-[11px] font-semibold text-[#485c6c]">Account Role</label>
-                <div className="mt-1 grid grid-cols-2 gap-2 text-[12px]">
-                  <button
-                    type="button"
-                    onClick={() => setRole('business_admin')}
-                    className={`rounded-xl border p-2 text-center font-medium ${
-                      role === 'business_admin'
-                        ? 'border-[#16806e] bg-[#edf5f3] text-[#16806e]'
-                        : 'border-[#ded9cc] bg-white text-[#526574]'
-                    }`}
-                  >
-                    Venue Owner
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setRole('super_admin')}
-                    className={`rounded-xl border p-2 text-center font-medium ${
-                      role === 'super_admin'
-                        ? 'border-[#16806e] bg-[#edf5f3] text-[#16806e]'
-                        : 'border-[#ded9cc] bg-white text-[#526574]'
-                    }`}
-                  >
-                    Super Admin
-                  </button>
-                </div>
-              </div>
-
-              {role === 'business_admin' && (
-                <div>
-                  <label className="block text-[11px] font-semibold text-[#485c6c]">Restaurant / Venue Name</label>
-                  <div className="mt-1 flex items-center gap-2 rounded-xl border border-[#ded9cc] bg-white px-3 py-2">
-                    <Store size={16} className="text-[#96a4af]" />
-                    <input
-                      type="text"
-                      placeholder="e.g. The Golden Fork, Bella Cucina"
-                      value={venueName}
-                      onChange={(e) => setVenueName(e.target.value)}
-                      className="w-full text-[13px] bg-transparent outline-none text-[#203147]"
-                    />
-                  </div>
-                </div>
-              )}
-            </>
-          )}
 
           <div>
             <label className="block text-[11px] font-semibold text-[#485c6c]">Email Address</label>
@@ -292,8 +216,12 @@ export function AuthCard({
           </div>
 
           <Button type="submit" disabled={loading} className="w-full justify-center !py-2.5">
-            {loading ? 'Processing...' : emailMode === 'signin' ? 'Sign In to Workspace' : 'Create Tablewave Account'}
+            {loading ? 'Authenticating...' : 'Sign In to Workspace'}
           </Button>
+
+          <p className="text-center font-mono text-[10px] text-[#8e9ca6]">
+            New business? Accounts are created exclusively by the Super Administrator.
+          </p>
         </form>
       )}
     </div>
