@@ -1,4 +1,4 @@
-import { type ComponentType, type FormEvent, type ReactNode, useMemo, useState } from 'react';
+import { type ComponentType, type FormEvent, type ReactNode, useMemo, useState, useEffect, useRef } from 'react';
 import { Redirect, useLocation, Link } from 'wouter';
 import { useAuth, useTablewaveAuth } from '@/lib/auth-context';
 import { useQueryClient } from '@tanstack/react-query';
@@ -6,7 +6,7 @@ import {
   ArrowRight, ArrowUpRight, BarChart3, Check, CheckCircle2, ChevronDown,
   CirclePlus, Clock3, Copy, Download, Edit3, ExternalLink, Package,
   Plus, QrCode, Search, Sparkles, Trash2, Users, Utensils, X,
-  Building2, Wallet, Store, Eye, EyeOff,
+  Building2, Wallet, Store, Eye, EyeOff, Volume2, VolumeX, Bell,
 } from 'lucide-react';
 import {
   RiStore3Line,
@@ -32,6 +32,9 @@ import { firestore } from '@/lib/firebase';
 import { doc, setDoc } from 'firebase/firestore';
 import { WorkspaceShell } from '@/components/workspace-shell';
 import { AppDatePicker, AppSelect, Button, EmptyState, Field, Modal, PageTitle, QueryState, SubmitButton } from '@/components/shared';
+import { toast } from '@/hooks/use-toast';
+import { playOrderChime, flashDocumentTitle, isSoundAlertsEnabled, setSoundAlertsEnabled } from '@/lib/sound-alerts';
+import { subscribeToOrders } from '@/lib/firestore-service';
 
 const money = (value: number) => new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR', maximumFractionDigits: 2 }).format(value || 0);
 const dateShort = (value: string) => new Intl.DateTimeFormat('en', { month: 'short', day: 'numeric', year: 'numeric' }).format(new Date(value));
@@ -1459,14 +1462,50 @@ function OutletsPage({ businessId, businesses, outlets, loading, error, retry, c
 const orderStatuses = ['new', 'preparing', 'ready', 'completed', 'cancelled'];
 function OrdersPage({ orders, loading, error, retry, client }: { orders: Order[]; loading: boolean; error: boolean; retry: () => void; client: ReturnType<typeof useQueryClient> }) {
   const [filter, setFilter] = useState('all'); const [search, setSearch] = useState('');
+  const [soundOn, setSoundOn] = useState(isSoundAlertsEnabled());
   const update = useUpdateOrder();
   const filtered = useMemo(() => orders.filter((order) => (filter === 'all' || order.status === filter) && `${order.customerName} ${order.outletName} ${order.tableNumber} ${order.id}`.toLowerCase().includes(search.toLowerCase())), [orders, filter, search]);
   const countFor = (status: string) => status === 'all' ? orders.length : orders.filter((order) => order.status === status).length;
   function setStatus(order: Order, status: string) { update.mutate({ orderId: order.id, data: { status: status as 'new' | 'preparing' | 'ready' | 'completed' | 'cancelled' } }, { onSuccess: () => invalidate(client, paths.orders, paths.dashboard, paths.analytics) }); }
 
-  return <><PageTitle eyebrow="Service / live orders" title="Keep service in motion." description="Review incoming orders, update the kitchen, and keep guests in the loop." action={<div className="flex items-center gap-2 rounded-[11px] bg-[#e5f0e9] px-3 py-2 text-[10px] font-semibold text-[#327963]"><span className="h-1.5 w-1.5 animate-pulse rounded-full bg-[#40a181]" /> Live order feed</div>} />
+  const toggleSound = () => {
+    const next = !soundOn;
+    setSoundOn(next);
+    setSoundAlertsEnabled(next);
+    if (next) {
+      playOrderChime();
+      toast({ title: '🔔 Order Chime Active', description: 'You will hear an alert chime when new orders arrive.' });
+    }
+  };
+
+  return <><PageTitle eyebrow="Service / live orders" title="Keep service in motion." description="Review incoming orders, update the kitchen, and keep guests in the loop." action={
+    <div className="flex flex-wrap items-center gap-2">
+      <button
+        onClick={toggleSound}
+        type="button"
+        title={soundOn ? 'Order chime active. Click to test or mute.' : 'Order chime muted. Click to enable.'}
+        className={`flex items-center gap-1.5 rounded-[11px] border px-3 py-2 text-[10px] font-semibold transition-all cursor-pointer ${
+          soundOn
+            ? 'border-[#bfe3d1] bg-[#eef8f3] text-[#1b6b55] hover:bg-[#e1f2e8] shadow-sm'
+            : 'border-[#e4e1d7] bg-[#fbfaf6] text-[#7d8a92] hover:bg-[#f0efe9]'
+        }`}
+      >
+        {soundOn ? <Volume2 size={13} className="text-[#16806e]" /> : <VolumeX size={13} className="text-[#9aa4a6]" />}
+        <span>{soundOn ? 'Chime Active' : 'Chime Muted'}</span>
+      </button>
+      <div className="flex items-center gap-2 rounded-[11px] bg-[#e5f0e9] px-3 py-2 text-[10px] font-semibold text-[#327963]">
+        <span className="relative flex h-2 w-2">
+          <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-[#16806e] opacity-75" />
+          <span className="relative inline-flex h-2 w-2 rounded-full bg-[#16806e]" />
+        </span>
+        Live order feed
+      </div>
+    </div>
+  } />
     <div className="mb-4 flex flex-wrap items-center justify-between gap-3"><div className="flex gap-1 overflow-x-auto rounded-[12px] bg-[#eae9e2] p-1">{['all', ...orderStatuses].map((status) => <button key={status} onClick={() => setFilter(status)} data-testid={`button-order-filter-${status}`} className={`whitespace-nowrap rounded-[9px] px-3 py-2 text-[10px] font-semibold capitalize transition-colors ${filter === status ? 'bg-[#fcfbf7] text-[#2e4558] shadow-sm' : 'text-[#78868c] hover:text-[#34485a]'}`}>{status === 'all' ? 'All' : status}<span className="ml-1.5 font-mono text-[9px] text-[#9ba3a3]">{countFor(status)}</span></button>)}</div><div className="relative w-full max-w-[270px]"><Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-[#98a1a3]" /><input className="field !py-[9px] !pl-9 text-[11px]" aria-label="Search orders" data-testid="input-search-orders" value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Search guest or table" /></div></div>
-    <QueryState loading={loading} error={error} retry={retry}>{filtered.length ? <div className="space-y-3">{filtered.map((order) => <article key={order.id} className="surface p-4 sm:p-5" data-testid={`card-order-${order.id}`}><div className="flex flex-wrap items-start justify-between gap-3"><div className="flex items-start gap-3"><span className="grid h-10 w-10 place-items-center rounded-[13px] bg-[#f0efe8] font-mono text-[10px] font-bold text-[#62717d]">T{order.tableNumber}</span><div><div className="flex flex-wrap items-center gap-2"><h2 className="text-[13px] font-bold text-[#34495a]">{order.customerName || 'Guest'}</h2><Status value={order.status} /><span className="font-mono text-[9px] text-[#9aa3a4]">#{order.id.slice(0, 7)}</span></div><p className="mt-1 text-[10px] text-[#849198]">{order.outletName} · {dateTime(order.createdAt)}{order.customerPhone && ` · ${order.customerPhone}`}</p></div></div>
+    <QueryState loading={loading} error={error} retry={retry}>{filtered.length ? <div className="space-y-3">{filtered.map((order) => {
+      const isBrandNew = order.status === 'new' && (Date.now() - new Date(order.createdAt).getTime()) < 180000;
+      return <article key={order.id} className={`surface p-4 sm:p-5 transition-all duration-300 ${isBrandNew ? 'border-l-4 border-l-[#16806e] bg-[#f7faf8] shadow-sm ring-1 ring-[#16806e]/20' : ''}`} data-testid={`card-order-${order.id}`}><div className="flex flex-wrap items-start justify-between gap-3"><div className="flex items-start gap-3"><span className="grid h-10 w-10 place-items-center rounded-[13px] bg-[#f0efe8] font-mono text-[10px] font-bold text-[#62717d]">T{order.tableNumber}</span><div><div className="flex flex-wrap items-center gap-2"><h2 className="text-[13px] font-bold text-[#34495a]">{order.customerName || 'Guest'}</h2><Status value={order.status} />{isBrandNew && <span className="inline-flex items-center gap-1 rounded-full bg-[#16806e] px-2 py-0.5 font-mono text-[9px] font-bold text-white shadow-sm animate-pulse"><Sparkles size={9} /> NEW</span>}<span className="font-mono text-[9px] text-[#9aa3a4]">#{order.id.slice(0, 7)}</span></div><p className="mt-1 text-[10px] text-[#849198]">{order.outletName} · {dateTime(order.createdAt)}{order.customerPhone && ` · ${order.customerPhone}`}</p></div></div>
       <div className="flex flex-wrap items-center gap-2.5">
         <span className="font-display text-[17px] font-bold tracking-[-.03em] text-[#35495a] mr-1">{money(order.total)}</span>
 
@@ -1515,7 +1554,7 @@ function OrdersPage({ orders, loading, error, retry, client }: { orders: Order[]
           }))}
         />
       </div>
-    </div><div className="mt-4 flex flex-wrap items-center gap-x-3 gap-y-1 border-t border-[#efede6] pt-3">{order.items.map((line, i) => <span key={`${line.itemId}-${i}`} className="text-[10px] text-[#65747e]"><b className="mr-1.5 text-[#374b5e]">{line.quantity}×</b>{line.name}{line.selectedVariant && <small className="text-[#8d989b]"> · {line.selectedVariant}</small>}{line.selectedAddOns?.length > 0 && <small className="text-[#8d989b]"> · {line.selectedAddOns.join(', ')}</small>}</span>)}</div></article>)}</div> : <EmptyState title={search ? 'No orders match that search' : 'Nothing on the board just yet'} description={search ? 'Try another guest name, table or outlet.' : 'New guest orders will appear here as soon as they come in.'} />}</QueryState>
+    </div><div className="mt-4 flex flex-wrap items-center gap-x-3 gap-y-1 border-t border-[#efede6] pt-3">{order.items.map((line, i) => <span key={`${line.itemId}-${i}`} className="text-[10px] text-[#65747e]"><b className="mr-1.5 text-[#374b5e]">{line.quantity}×</b>{line.name}{line.selectedVariant && <small className="text-[#8d989b]"> · {line.selectedVariant}</small>}{line.selectedAddOns?.length > 0 && <small className="text-[#8d989b]"> · {line.selectedAddOns.join(', ')}</small>}</span>)}</div></article>; })}</div> : <EmptyState title={search ? 'No orders match that search' : 'Nothing on the board just yet'} description={search ? 'Try another guest name, table or outlet.' : 'New guest orders will appear here as soon as they come in.'} />}</QueryState>
   </>;
 }
 
@@ -1569,6 +1608,7 @@ export function Workspace() {
     query: {
       enabled: enabled && Boolean(userRole) && isRoutePermitted && route === 'dashboard',
       queryKey: getGetDashboardQueryKey(),
+      refetchInterval: 4000,
     },
   });
   const businesses = useListBusinesses({
@@ -1614,6 +1654,7 @@ export function Workspace() {
     query: {
       enabled: enabled && ['business_admin', 'staff'].includes(userRole || '') && isRoutePermitted && ['orders', 'dashboard'].includes(route),
       queryKey: getListOrdersQueryKey(),
+      refetchInterval: 3000,
     },
   });
   const analytics = useGetAnalytics({
@@ -1626,6 +1667,80 @@ export function Workspace() {
   const updateBusiness = useUpdateBusiness();
   const invite = useInviteTeamMember();
   const createPlan = useCreatePlan();
+
+  const knownOrderIdsRef = useRef<Set<string> | null>(null);
+
+  // 1. Real-time live Firestore subscription & Cross-tab BroadcastChannel listener
+  useEffect(() => {
+    if (!enabled || !['business_admin', 'staff', 'super_admin'].includes(userRole || '')) return;
+
+    // Real-time Firestore onSnapshot subscription
+    const unsubscribeFirestore = subscribeToOrders((liveOrders) => {
+      const scoped = user?.isSuperAdmin
+        ? liveOrders
+        : user?.businessId
+        ? liveOrders.filter((o) => o.businessId === user.businessId)
+        : liveOrders;
+
+      client.setQueryData(getListOrdersQueryKey(), scoped);
+      void client.invalidateQueries({ queryKey: getGetDashboardQueryKey() });
+      void client.invalidateQueries({ queryKey: getGetAnalyticsQueryKey() });
+    });
+
+    // Cross-tab BroadcastChannel listener
+    let bc: BroadcastChannel | null = null;
+    try {
+      if (typeof BroadcastChannel !== 'undefined') {
+        bc = new BroadcastChannel('tablewave_live_orders');
+        bc.onmessage = (event) => {
+          if (event.data?.type === 'ORDER_CREATED') {
+            void client.invalidateQueries({ queryKey: getListOrdersQueryKey() });
+            void client.invalidateQueries({ queryKey: getGetDashboardQueryKey() });
+            void client.invalidateQueries({ queryKey: getGetAnalyticsQueryKey() });
+          }
+        };
+      }
+    } catch {}
+
+    const onLocalOrder = () => {
+      void client.invalidateQueries({ queryKey: getListOrdersQueryKey() });
+      void client.invalidateQueries({ queryKey: getGetDashboardQueryKey() });
+      void client.invalidateQueries({ queryKey: getGetAnalyticsQueryKey() });
+    };
+    window.addEventListener('tablewave:order-created', onLocalOrder);
+
+    return () => {
+      unsubscribeFirestore();
+      if (bc) bc.close();
+      window.removeEventListener('tablewave:order-created', onLocalOrder);
+    };
+  }, [enabled, userRole, user?.businessId, user?.isSuperAdmin, client]);
+
+  // 2. Chime sound alert & toast notification when a new order arrives
+  useEffect(() => {
+    const list = orders.data;
+    if (!list || !Array.isArray(list)) return;
+
+    if (!knownOrderIdsRef.current) {
+      // First mount: initialize known IDs so we don't chime for historical orders
+      knownOrderIdsRef.current = new Set(list.map((o) => o.id));
+      return;
+    }
+
+    const brandNew = list.filter((o) => !knownOrderIdsRef.current!.has(o.id) && o.status === 'new');
+    if (brandNew.length > 0) {
+      brandNew.forEach((o) => knownOrderIdsRef.current!.add(o.id));
+      const newest = brandNew[0];
+      playOrderChime();
+      flashDocumentTitle(`🔔 Table ${newest.tableNumber} Order!`);
+      toast({
+        title: `🔔 New Order Received! (Table ${newest.tableNumber})`,
+        description: `${newest.customerName || 'Guest'} placed an order · ${money(newest.total)}`,
+      });
+    } else {
+      list.forEach((o) => knownOrderIdsRef.current!.add(o.id));
+    }
+  }, [orders.data]);
 
   if (!isLoaded) return <div className="min-h-[100dvh] bg-[#f5f3ed] p-6"><div className="skeleton mx-auto h-12 max-w-4xl" /><div className="skeleton mx-auto mt-8 h-72 max-w-4xl" /></div>;
   if (!isSignedIn) return <Redirect to="/sign-in" />;

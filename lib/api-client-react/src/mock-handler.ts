@@ -775,6 +775,16 @@ export function handleClientMockRequest(
     };
     db.orders.unshift(newOrder);
     saveDb(db);
+    if (typeof window !== 'undefined') {
+      try {
+        window.dispatchEvent(new CustomEvent('tablewave:order-created', { detail: newOrder }));
+        if (typeof BroadcastChannel !== 'undefined') {
+          const bc = new BroadcastChannel('tablewave_live_orders');
+          bc.postMessage({ type: 'ORDER_CREATED', order: newOrder });
+          bc.close();
+        }
+      } catch {}
+    }
     return newOrder;
   }
 

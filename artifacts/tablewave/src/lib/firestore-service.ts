@@ -9,6 +9,7 @@ import {
   setDoc,
   updateDoc,
   deleteDoc,
+  onSnapshot,
 } from 'firebase/firestore';
 import { firestore } from './firebase';
 
@@ -929,6 +930,18 @@ export async function handleFirestoreApi(
         }
       }
 
+      // Broadcast order across browser tabs & windows immediately
+      if (typeof window !== 'undefined') {
+        try {
+          window.dispatchEvent(new CustomEvent('tablewave:order-created', { detail: newOrder }));
+          if (typeof BroadcastChannel !== 'undefined') {
+            const bc = new BroadcastChannel('tablewave_live_orders');
+            bc.postMessage({ type: 'ORDER_CREATED', order: newOrder });
+            bc.close();
+          }
+        } catch {}
+      }
+
       return newOrder;
     }
   } catch (err) {
@@ -937,4 +950,30 @@ export async function handleFirestoreApi(
   }
 
   return undefined;
+}
+
+/**
+ * Real-time Firestore subscription for orders
+ * Emits live updates whenever orders are created or updated in Firestore
+ */
+export function subscribeToOrders(callback: (orders: FirestoreOrder[]) => void): () => void {
+  if (!firestore) return () => {};
+  try {
+    const ordersCol = collection(firestore, 'orders');
+    return onSnapshot(
+      ordersCol,
+      (snapshot) => {
+        const orders = snapshot.docs
+          .map((d) => d.data() as FirestoreOrder)
+          .filter((o) => !o.id.startsWith('ord_10') && !o.businessId.startsWith('biz_demo_'));
+        callback(orders);
+      },
+      (err) => {
+        console.warn('[Firestore Live Orders onSnapshot error]:', err);
+      }
+    );
+  } catch (err) {
+    console.warn('[Firestore subscribeToOrders failed]:', err);
+    return () => {};
+  }
 }
