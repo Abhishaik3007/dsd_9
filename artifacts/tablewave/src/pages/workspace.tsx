@@ -33,6 +33,7 @@ import { doc, setDoc } from 'firebase/firestore';
 import { WorkspaceShell } from '@/components/workspace-shell';
 import { AppDatePicker, AppSelect, Button, EmptyState, Field, Modal, PageTitle, QueryState, SubmitButton } from '@/components/shared';
 import { toast } from '@/hooks/use-toast';
+import { ToastAction } from '@/components/ui/toast';
 import { playOrderChime, flashDocumentTitle, isSoundAlertsEnabled, setSoundAlertsEnabled } from '@/lib/sound-alerts';
 import { subscribeToOrders } from '@/lib/firestore-service';
 
@@ -1591,7 +1592,7 @@ export const ROLE_DEFAULT_ROUTE: Record<string, string> = {
 
 export function Workspace() {
   const { isLoaded, isSignedIn, user: authUser } = useTablewaveAuth();
-  const [location] = useLocation();
+  const [location, setLocation] = useLocation();
   const client = useQueryClient();
   const route = location.split('/')[1] || 'dashboard';
   const enabled = Boolean(isSignedIn);
@@ -1733,14 +1734,31 @@ export function Workspace() {
       const newest = brandNew[0];
       playOrderChime();
       flashDocumentTitle(`🔔 Table ${newest.tableNumber} Order!`);
-      toast({
-        title: `🔔 New Order Received! (Table ${newest.tableNumber})`,
-        description: `${newest.customerName || 'Guest'} placed an order · ${money(newest.total)}`,
-      });
+
+      // Only show the toast notification popup if the user is NOT already on the live orders page
+      if (route !== 'orders') {
+        toast({
+          title: `🔔 New Order Received! (Table ${newest.tableNumber})`,
+          description: `${newest.customerName || 'Guest'} placed an order · ${money(newest.total)} · Tap to view`,
+          className: 'cursor-pointer hover:border-[#16806e] transition-all bg-[#f7faf8] border-[#cbe4d7] shadow-md',
+          onClick: () => {
+            setLocation('/orders');
+          },
+          action: (
+            <ToastAction
+              altText="View live orders"
+              onClick={() => setLocation('/orders')}
+              className="bg-[#16806e] text-white hover:bg-[#126b5c] border-none text-[11px] font-bold shrink-0 cursor-pointer"
+            >
+              View →
+            </ToastAction>
+          ),
+        });
+      }
     } else {
       list.forEach((o) => knownOrderIdsRef.current!.add(o.id));
     }
-  }, [orders.data]);
+  }, [orders.data, route, setLocation]);
 
   if (!isLoaded) return <div className="min-h-[100dvh] bg-[#f5f3ed] p-6"><div className="skeleton mx-auto h-12 max-w-4xl" /><div className="skeleton mx-auto mt-8 h-72 max-w-4xl" /></div>;
   if (!isSignedIn) return <Redirect to="/sign-in" />;
