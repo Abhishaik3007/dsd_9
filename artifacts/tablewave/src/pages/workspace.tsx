@@ -6,7 +6,7 @@ import {
   ArrowRight, ArrowUpRight, BarChart3, Check, CheckCircle2, ChevronDown,
   CirclePlus, Clock3, Copy, Download, Edit3, ExternalLink, Package,
   Plus, QrCode, Search, Sparkles, Trash2, Users, Utensils, X,
-  Building2, Wallet, Store,
+  Building2, Wallet, Store, Eye, EyeOff,
 } from 'lucide-react';
 import {
   RiStore3Line,
@@ -584,6 +584,7 @@ function BusinessesPage({
   const [search, setSearch] = useState('');
   const [formError, setFormError] = useState('');
   const [editFormError, setEditFormError] = useState('');
+  const [showVendorPass, setShowVendorPass] = useState(false);
 
   const visible = businesses.filter((b) =>
     `${b.name} ${b.ownerEmail} ${b.type}`.toLowerCase().includes(search.toLowerCase())
@@ -857,15 +858,26 @@ function BusinessesPage({
                 />
               </Field>
               <Field label="Vendor login password" hint="Min 6 characters">
-                <input
-                  className="field"
-                  type="password"
-                  name="password"
-                  placeholder="Create vendor password"
-                  minLength={6}
-                  required
-                  data-testid="input-business-password"
-                />
+                <div className="relative">
+                  <input
+                    className="field !pr-10"
+                    type={showVendorPass ? 'text' : 'password'}
+                    name="password"
+                    placeholder="Create vendor password"
+                    minLength={6}
+                    required
+                    data-testid="input-business-password"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setShowVendorPass((prev) => !prev)}
+                    className="absolute right-2.5 top-1/2 -translate-y-1/2 flex h-6 w-6 items-center justify-center rounded text-[#8899a6] hover:text-[#203147] transition-colors cursor-pointer"
+                    title={showVendorPass ? 'Hide password' : 'Show password'}
+                    aria-label={showVendorPass ? 'Hide password' : 'Show password'}
+                  >
+                    {showVendorPass ? <EyeOff size={15} /> : <Eye size={15} />}
+                  </button>
+                </div>
               </Field>
             </div>
             <Field label="Subscription expiry" hint="Optional — set access validity period">

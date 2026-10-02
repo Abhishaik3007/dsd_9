@@ -487,13 +487,6 @@ export function WorkspaceShell({ user, children }: { user: CurrentUser; children
             </div>
 
             <div className="flex items-center gap-3">
-              <div className="hidden items-center gap-2 rounded-full border border-[#16806e]/20 bg-[#16806e]/5 px-3 py-1 text-[11px] font-medium text-[#16806e] sm:flex" title="Cloud Firestore is actively connected and serving dynamic data">
-                <span className="relative flex h-2 w-2">
-                  <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-[#16806e] opacity-75" />
-                  <span className="relative inline-flex h-2 w-2 rounded-full bg-[#16806e]" />
-                </span>
-                <span>Firestore Live</span>
-              </div>
               <button
                 type="button"
                 aria-label="Notifications"
