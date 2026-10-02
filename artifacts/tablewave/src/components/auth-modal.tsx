@@ -173,18 +173,9 @@ export function AuthCard({
         </div>
       )}
 
-      {/* TAB 2: Secure Email / Password Sign In */}
+      {/* TAB 2: Email / Password Sign In */}
       {activeTab === 'email' && (
         <form onSubmit={handleEmailAuth} className="mt-6 space-y-4">
-          <div className="rounded-xl border border-[#ded9cc] bg-[#f8f6f0] p-3 text-[11px] leading-relaxed text-[#5c6e7a]">
-            <p className="font-semibold text-[#203147] flex items-center gap-1.5">
-              <span>🔒</span> Super Admin Managed Platform
-            </p>
-            <p className="mt-0.5 text-[10.5px] text-[#71828f]">
-              Business and venue accounts are provisioned exclusively by the Platform Super Admin. Sign in with your assigned credentials.
-            </p>
-          </div>
-
           <div>
             <label className="block text-[11px] font-semibold text-[#485c6c]">Email Address</label>
             <div className="mt-1 flex items-center gap-2 rounded-xl border border-[#ded9cc] bg-white px-3 py-2">
@@ -218,10 +209,6 @@ export function AuthCard({
           <Button type="submit" disabled={loading} className="w-full justify-center !py-2.5">
             {loading ? 'Authenticating...' : 'Sign In to Workspace'}
           </Button>
-
-          <p className="text-center font-mono text-[10px] text-[#8e9ca6]">
-            New business? Accounts are created exclusively by the Super Administrator.
-          </p>
         </form>
       )}
     </div>
