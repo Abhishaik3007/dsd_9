@@ -418,15 +418,17 @@ protectedRouter.patch("/items/:itemId", async (req, res) => {
 
 // /orders
 protectedRouter.get("/orders", async (_req, res) => {
-  const formatted = mockOrders.map((o) => ({
-    ...o,
-    customerPhone: o.customerPhone || "+1 (555) 000-0000",
-    items: o.items.map((it) => ({
-      ...it,
-      selectedVariant: it.selectedVariant || "",
-      selectedAddOns: it.selectedAddOns || [],
-    })),
-  }));
+  const formatted = [...mockOrders]
+    .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
+    .map((o) => ({
+      ...o,
+      customerPhone: o.customerPhone || "+1 (555) 000-0000",
+      items: o.items.map((it) => ({
+        ...it,
+        selectedVariant: it.selectedVariant || "",
+        selectedAddOns: it.selectedAddOns || [],
+      })),
+    }));
   res.json(ListOrdersResponse.parse(formatted));
 });
 

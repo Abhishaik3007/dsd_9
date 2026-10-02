@@ -113,15 +113,17 @@ function Overview({
     const startOf7d = now.getTime() - 7 * 86400000;
     const startOf30d = now.getTime() - 30 * 86400000;
 
-    return orders.filter((order) => {
-      const orderTime = new Date(order.createdAt).getTime();
-      if (isNaN(orderTime)) return true;
-      if (timeframe === 'today') return orderTime >= startOfToday;
-      if (timeframe === 'yesterday') return orderTime >= startOfYesterday && orderTime < startOfToday;
-      if (timeframe === '7d') return orderTime >= startOf7d;
-      if (timeframe === '30d') return orderTime >= startOf30d;
-      return true;
-    });
+    return [...orders]
+      .filter((order) => {
+        const orderTime = new Date(order.createdAt).getTime();
+        if (isNaN(orderTime)) return true;
+        if (timeframe === 'today') return orderTime >= startOfToday;
+        if (timeframe === 'yesterday') return orderTime >= startOfYesterday && orderTime < startOfToday;
+        if (timeframe === '7d') return orderTime >= startOf7d;
+        if (timeframe === '30d') return orderTime >= startOf30d;
+        return true;
+      })
+      .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
   }, [orders, timeframe]);
 
   const venueOrderCount = useMemo(() => {
@@ -153,7 +155,8 @@ function Overview({
     if (filteredOrders.length) {
       return filteredOrders.slice(0, 5);
     }
-    return dashboard?.recentOrders || orders.slice(0, 5);
+    const fallbackSorted = [...orders].sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+    return dashboard?.recentOrders || fallbackSorted.slice(0, 5);
   }, [filteredOrders, dashboard, orders]);
 
   const trendData = useMemo(() => {
@@ -1465,7 +1468,11 @@ function OrdersPage({ orders, loading, error, retry, client }: { orders: Order[]
   const [filter, setFilter] = useState('all'); const [search, setSearch] = useState('');
   const [soundOn, setSoundOn] = useState(isSoundAlertsEnabled());
   const update = useUpdateOrder();
-  const filtered = useMemo(() => orders.filter((order) => (filter === 'all' || order.status === filter) && `${order.customerName} ${order.outletName} ${order.tableNumber} ${order.id}`.toLowerCase().includes(search.toLowerCase())), [orders, filter, search]);
+  const filtered = useMemo(() => {
+    return [...orders]
+      .filter((order) => (filter === 'all' || order.status === filter) && `${order.customerName} ${order.outletName} ${order.tableNumber} ${order.id}`.toLowerCase().includes(search.toLowerCase()))
+      .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+  }, [orders, filter, search]);
   const countFor = (status: string) => status === 'all' ? orders.length : orders.filter((order) => order.status === status).length;
   function setStatus(order: Order, status: string) { update.mutate({ orderId: order.id, data: { status: status as 'new' | 'preparing' | 'ready' | 'completed' | 'cancelled' } }, { onSuccess: () => invalidate(client, paths.orders, paths.dashboard, paths.analytics) }); }
 

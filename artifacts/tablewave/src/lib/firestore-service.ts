@@ -689,7 +689,8 @@ export async function handleFirestoreApi(
       const snap = await getDocs(collection(firestore, 'orders'));
       const list = snap.docs
         .map((d) => d.data() as FirestoreOrder)
-        .filter((o) => !o.id.startsWith('ord_10') && !o.businessId.startsWith('biz_demo_'));
+        .filter((o) => !o.id.startsWith('ord_10') && !o.businessId.startsWith('biz_demo_'))
+        .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
 
       if (user.isSuperAdmin) return list;
       return user.businessId ? list.filter((o) => o.businessId === user.businessId) : [];
@@ -969,7 +970,8 @@ export function subscribeToOrders(callback: (orders: FirestoreOrder[]) => void):
       (snapshot) => {
         const orders = snapshot.docs
           .map((d) => d.data() as FirestoreOrder)
-          .filter((o) => !o.id.startsWith('ord_10') && !o.businessId.startsWith('biz_demo_'));
+          .filter((o) => !o.id.startsWith('ord_10') && !o.businessId.startsWith('biz_demo_'))
+          .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
         callback(orders);
       },
       (err) => {

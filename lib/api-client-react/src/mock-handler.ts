@@ -660,7 +660,8 @@ export function handleClientMockRequest(
   // 9. /api/orders
   if (cleanUrl === '/api/orders' && method === 'GET') {
     const bizId = user.businessId || 'biz_demo_juniper';
-    return user.isSuperAdmin ? db.orders : db.orders.filter((o) => o.businessId === bizId);
+    const sorted = [...db.orders].sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+    return user.isSuperAdmin ? sorted : sorted.filter((o) => o.businessId === bizId);
   }
 
   const orderMatch = cleanUrl.match(/^\/api\/orders\/([^/]+)$/);
