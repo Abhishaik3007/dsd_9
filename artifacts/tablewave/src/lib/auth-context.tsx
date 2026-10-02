@@ -146,13 +146,7 @@ export function TablewaveAuthProvider({ children }: { children: ReactNode }) {
         setAuthSession(data.token, data.user, 'firebase');
         return;
       } catch (fbErr: any) {
-        console.warn('Firebase sign-in failed, checking credentials:', fbErr);
-        if (fbErr?.code === 'auth/wrong-password' || fbErr?.code === 'auth/invalid-credential') {
-          throw new Error('Invalid email or password. Please check your credentials.');
-        }
-        if (fbErr?.code === 'auth/user-not-found') {
-          throw new Error('No account found for this email. Business accounts must be provisioned by the Platform Super Admin.');
-        }
+        console.warn('Firebase sign-in failed, checking Firestore credentials:', fbErr);
       }
     }
 
@@ -190,7 +184,7 @@ export function TablewaveAuthProvider({ children }: { children: ReactNode }) {
       return;
     }
 
-    // 2. Query Firestore users collection for account provisioned by Super Admin
+    // 2. Query Firestore users collection for account provisioned by Super Admin or Business Admin
     if (firestore) {
       try {
         const q = query(collection(firestore, 'users'), where('email', '==', cleanEmail));
@@ -207,7 +201,7 @@ export function TablewaveAuthProvider({ children }: { children: ReactNode }) {
             id: docData.id || snap.docs[0].id,
             email: docData.email,
             name: docData.name || cleanEmail.split('@')[0],
-            role: (docData.role || 'business_admin') as any,
+            role: (docData.role || docData.userType || 'staff') as any,
             isSuperAdmin: docData.role === 'super_admin' || docData.isSuperAdmin === true,
             businessId: docData.businessId || null,
             businessName: docData.businessName || null,
@@ -223,7 +217,7 @@ export function TablewaveAuthProvider({ children }: { children: ReactNode }) {
     }
 
     // 3. If neither Super Admin nor provisioned in Firestore:
-    throw new Error('No account found for this email. Business accounts are created exclusively by the Platform Super Admin.');
+    throw new Error('Invalid email or password. Please check your credentials.');
   };
 
   const registerWithEmail = async (

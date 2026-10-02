@@ -488,7 +488,7 @@ protectedRouter.post("/team", async (req, res): Promise<void> => {
   }
   const [invite] = await db
     .insert(invitationsTable)
-    .values({ email, businessId, role: parsed.data.role, status: "invited" })
+    .values({ email, businessId, role: parsed.data.role, status: "active" })
     .returning();
   res.status(201).json(InviteTeamMemberResponse.parse({
     id: invite.id,

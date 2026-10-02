@@ -30,7 +30,7 @@ import {
 } from '@workspace/api-client-react';
 import QRCode from 'qrcode';
 import { firestore } from '@/lib/firebase';
-import { doc, setDoc } from 'firebase/firestore';
+import { doc, setDoc, deleteDoc } from 'firebase/firestore';
 import { WorkspaceShell } from '@/components/workspace-shell';
 import { AppDatePicker, AppSelect, BrandMark, Button, EmptyState, Field, Modal, PageTitle, QueryState, SubmitButton } from '@/components/shared';
 import { toast } from '@/hooks/use-toast';
@@ -1000,14 +1000,283 @@ function BusinessesPage({
   );
 }
 
-function TeamPage({ members, loading, error, retry, invite, pending, user, client }: { members: import('@workspace/api-client-react').TeamMember[]; loading: boolean; error: boolean; retry: () => void; invite: ReturnType<typeof useInviteTeamMember>; pending: boolean; user: CurrentUser; client: ReturnType<typeof useQueryClient> }) {
-  const [modal, setModal] = useState(false); const [formError, setFormError] = useState('');
-  function submit(event: FormEvent<HTMLFormElement>) { event.preventDefault(); setFormError(''); const f = new FormData(event.currentTarget); invite.mutate({ data: { email: String(f.get('email')), role: String(f.get('role')) as 'business_admin' | 'staff', businessId: user.businessId || null } }, { onSuccess: () => { setModal(false); invalidate(client, paths.team); }, onError: () => setFormError('Invitation could not be sent. Confirm the email and try again.') }); }
-  return <><PageTitle eyebrow="People / access" title="Your team" description="Invite the people who keep every service running smoothly." action={<Button onClick={() => setModal(true)} testId="button-invite-member"><Plus size={16} /> Invite teammate</Button>} />
-    <div className="mb-5 grid gap-3 sm:grid-cols-[1fr_290px]"><div className="surface flex items-center gap-4 p-5"><span className="grid h-11 w-11 place-items-center rounded-[14px] bg-[#e7f0e9] text-[#16806e]"><Users size={19} /></span><div><p className="font-display text-[20px] font-bold tracking-[-.04em]">{members.length} <span className="text-[12px] font-semibold tracking-normal text-[#78868e]">team members</span></p><p className="mt-1 text-[10px] text-[#89959a]">People with access to your workspace</p></div></div><div className="flex items-center justify-between rounded-[16px] bg-[#203147] px-5 py-4 text-white"><div><p className="text-[10px] text-[#a8b8c0]">Open invitations</p><p className="mt-1 font-display text-[22px] font-bold">{members.filter((m) => m.status === 'invited').length}</p></div><ArrowUpRight size={18} className="text-[#68cbb0]" /></div></div>
-    <QueryState loading={loading} error={error} retry={retry}>{members.length ? <div className="surface overflow-hidden"><TableWrap><thead><tr><Th>Member</Th><Th>Role</Th><Th>Business</Th><Th>Joined</Th><Th>Status</Th></tr></thead><tbody>{members.map((member) => <tr key={member.id} data-testid={`row-team-member-${member.id}`}><Td><div className="flex items-center gap-2.5"><span className="grid h-8 w-8 place-items-center rounded-full bg-[#e5eee8] font-display text-[10px] font-bold text-[#367663]">{initials(member.name || member.email)}</span><span className="font-semibold text-[#35495a]">{member.name || 'Invitation pending'}<small className="mt-1 block text-[10px] font-normal text-[#89959a]">{member.email}</small></span></div></Td><Td><span className="capitalize">{member.role.replace('_', ' ')}</span></Td><Td>{member.businessName || 'Platform'}</Td><Td>{dateShort(member.createdAt)}</Td><Td><Status value={member.status} /></Td></tr>)}</tbody></TableWrap></div> : <EmptyState title="Bring your crew in" description="Invite a teammate to help manage menus, orders and service." action={<Button onClick={() => setModal(true)}><Plus size={15} /> Invite teammate</Button>} />}</QueryState>
-    {modal && <Modal title="Invite a teammate" subtitle="They’ll receive an invitation at their work email." onClose={() => setModal(false)}><form onSubmit={submit} className="space-y-4"><Field label="Work email"><input className="field" type="email" name="email" placeholder="teammate@venue.com" required data-testid="input-invite-email" /></Field><Field label="Access level"><AppSelect name="role" defaultValue="staff" testId="select-invite-role" options={[{ value: 'staff', label: 'Staff — manage service' }, { value: 'business_admin', label: 'Business admin — manage venue' }]} /></Field>{formError && <p className="rounded-lg bg-[#fae9e6] px-3 py-2 text-[11px] text-[#a84e45]">{formError}</p>}<div className="flex justify-end gap-2 border-t border-[#ebe8df] pt-4"><Button variant="secondary" onClick={() => setModal(false)}>Cancel</Button><SubmitButton pending={pending}>Send invitation</SubmitButton></div></form></Modal>}
-  </>;
+function TeamPage({
+  members,
+  loading,
+  error,
+  retry,
+  invite,
+  pending,
+  user,
+  client,
+}: {
+  members: import('@workspace/api-client-react').TeamMember[];
+  loading: boolean;
+  error: boolean;
+  retry: () => void;
+  invite: ReturnType<typeof useInviteTeamMember>;
+  pending: boolean;
+  user: CurrentUser;
+  client: ReturnType<typeof useQueryClient>;
+}) {
+  const [modal, setModal] = useState(false);
+  const [showPassword, setShowPassword] = useState(false);
+  const [formError, setFormError] = useState('');
+  const [deletingId, setDeletingId] = useState<string | null>(null);
+
+  function submit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    setFormError('');
+    const f = new FormData(event.currentTarget);
+    const name = String(f.get('name') || '').trim();
+    const email = String(f.get('email') || '').trim().toLowerCase();
+    const password = String(f.get('password') || '').trim();
+    const role = (String(f.get('role') || 'staff')) as 'business_admin' | 'staff';
+
+    if (!email || !password) {
+      setFormError('Email and password are required.');
+      return;
+    }
+    if (password.length < 6) {
+      setFormError('Password must be at least 6 characters.');
+      return;
+    }
+
+    const payload = {
+      email,
+      name: name || email.split('@')[0],
+      password,
+      role,
+      businessId: user.businessId || null,
+      businessName: user.businessName || 'Venue',
+    };
+
+    invite.mutate(
+      { data: payload as any },
+      {
+        onSuccess: async (createdMember: any) => {
+          if (firestore) {
+            try {
+              const uid = createdMember?.id || `usr_staff_${Date.now().toString().slice(-6)}`;
+              await setDoc(
+                doc(firestore, 'users', uid),
+                {
+                  id: uid,
+                  email,
+                  name: name || email.split('@')[0],
+                  password,
+                  role,
+                  userType: role,
+                  status: 'active',
+                  businessId: user.businessId || null,
+                  businessName: user.businessName || 'Venue',
+                  isSuperAdmin: false,
+                  createdAt: new Date().toISOString(),
+                },
+                { merge: true }
+              );
+            } catch (fsErr) {
+              console.warn('[Firestore] direct staff write note:', fsErr);
+            }
+          }
+          setModal(false);
+          invalidate(client, paths.team);
+        },
+        onError: () => setFormError('Could not add team member. Please check details and try again.'),
+      }
+    );
+  }
+
+  const staffMembers = members.filter((m) => m.role === 'staff');
+
+  return (
+    <>
+      <PageTitle
+        eyebrow="People / access"
+        title="Your team"
+        description="Add staff and team members with login passwords to manage live orders and service."
+        action={
+          <Button onClick={() => { setFormError(''); setShowPassword(false); setModal(true); }} testId="button-invite-member">
+            <Plus size={16} /> Add team member
+          </Button>
+        }
+      />
+      <div className="mb-5 grid gap-3 sm:grid-cols-[1fr_290px]">
+        <div className="surface flex items-center gap-4 p-5">
+          <span className="grid h-11 w-11 place-items-center rounded-[14px] bg-[#e7f0e9] text-[#16806e]">
+            <Users size={19} />
+          </span>
+          <div>
+            <p className="font-display text-[20px] font-bold tracking-[-.04em]">
+              {members.length} <span className="text-[12px] font-semibold tracking-normal text-[#78868e]">team members</span>
+            </p>
+            <p className="mt-1 text-[10px] text-[#89959a]">People with account access to your workspace</p>
+          </div>
+        </div>
+        <div className="flex items-center justify-between rounded-[16px] bg-[#203147] px-5 py-4 text-white">
+          <div>
+            <p className="text-[10px] text-[#a8b8c0]">Active Staff</p>
+            <p className="mt-1 font-display text-[22px] font-bold">
+              {staffMembers.length}
+            </p>
+          </div>
+          <ArrowUpRight size={18} className="text-[#68cbb0]" />
+        </div>
+      </div>
+      <QueryState loading={loading} error={error} retry={retry}>
+        {members.length ? (
+          <div className="surface overflow-hidden">
+            <TableWrap>
+              <thead>
+                <tr>
+                  <Th>Member</Th>
+                  <Th>Role</Th>
+                  <Th>Business</Th>
+                  <Th>Joined</Th>
+                  <Th>Status</Th>
+                  <Th>Action</Th>
+                </tr>
+              </thead>
+              <tbody>
+                {members.map((member) => (
+                  <tr key={member.id} data-testid={`row-team-member-${member.id}`}>
+                    <Td>
+                      <div className="flex items-center gap-2.5">
+                        <span className="grid h-8 w-8 place-items-center rounded-full bg-[#e5eee8] font-display text-[10px] font-bold text-[#367663]">
+                          {initials(member.name || member.email || 'TM')}
+                        </span>
+                        <span className="font-semibold text-[#35495a]">
+                          {member.name || member.email.split('@')[0]}
+                          <small className="mt-1 block text-[10px] font-normal text-[#89959a]">{member.email}</small>
+                        </span>
+                      </div>
+                    </Td>
+                    <Td>
+                      <span className="inline-flex items-center rounded-md bg-[#edf5f1] px-2 py-0.5 text-[11px] font-medium text-[#2d6e5d] capitalize">
+                        {member.role === 'staff' ? 'Staff (Live Orders)' : member.role.replace('_', ' ')}
+                      </span>
+                    </Td>
+                    <Td>{member.businessName || 'Venue'}</Td>
+                    <Td>{dateShort(member.createdAt)}</Td>
+                    <Td>
+                      <Status value={member.status || 'active'} />
+                    </Td>
+                    <Td>
+                      <button
+                        type="button"
+                        title="Remove member"
+                        onClick={async () => {
+                          if (window.confirm(`Remove ${member.name || member.email} from team?`)) {
+                            setDeletingId(member.id);
+                            try {
+                              if (firestore) {
+                                await deleteDoc(doc(firestore, 'users', member.id));
+                              }
+                              invalidate(client, paths.team);
+                            } catch (delErr) {
+                              console.warn('Failed to delete member:', delErr);
+                            } finally {
+                              setDeletingId(null);
+                            }
+                          }
+                        }}
+                        disabled={deletingId === member.id}
+                        className="icon-button text-[#a84e45] hover:bg-[#fae9e6]"
+                      >
+                        <Trash2 size={14} />
+                      </button>
+                    </Td>
+                  </tr>
+                ))}
+              </tbody>
+            </TableWrap>
+          </div>
+        ) : (
+          <EmptyState
+            title="Bring your crew in"
+            description="Add staff members with password access to help manage live orders and service."
+            action={
+              <Button onClick={() => { setFormError(''); setShowPassword(false); setModal(true); }}>
+                <Plus size={15} /> Add team member
+              </Button>
+            }
+          />
+        )}
+      </QueryState>
+      {modal && (
+        <Modal
+          title="Add a team member"
+          subtitle="Create a direct login account with staff access to manage live orders."
+          onClose={() => setModal(false)}
+        >
+          <form onSubmit={submit} className="space-y-4">
+            <Field label="Full name">
+              <input
+                className="field"
+                type="text"
+                name="name"
+                placeholder="e.g. John Doe"
+                required
+                data-testid="input-invite-name"
+              />
+            </Field>
+            <Field label="Staff login email" hint="Used to sign in to Tablewave">
+              <input
+                className="field"
+                type="email"
+                name="email"
+                placeholder="staff@venue.com"
+                required
+                data-testid="input-invite-email"
+              />
+            </Field>
+            <Field label="Login password" hint="Min 6 characters">
+              <div className="relative">
+                <input
+                  className="field !pr-10"
+                  type={showPassword ? 'text' : 'password'}
+                  name="password"
+                  placeholder="Create staff password"
+                  minLength={6}
+                  required
+                  data-testid="input-invite-password"
+                />
+                <button
+                  type="button"
+                  onClick={() => setShowPassword((prev) => !prev)}
+                  className="absolute right-2.5 top-1/2 -translate-y-1/2 flex h-6 w-6 items-center justify-center rounded text-[#8899a6] hover:text-[#203147] transition-colors cursor-pointer"
+                  title={showPassword ? 'Hide password' : 'Show password'}
+                  aria-label={showPassword ? 'Hide password' : 'Show password'}
+                >
+                  {showPassword ? <EyeOff size={15} /> : <Eye size={15} />}
+                </button>
+              </div>
+            </Field>
+            <Field label="Access level">
+              <AppSelect
+                name="role"
+                defaultValue="staff"
+                testId="select-invite-role"
+                options={[
+                  { value: 'staff', label: 'Staff — live orders & service only' },
+                  { value: 'business_admin', label: 'Business admin — full venue access' },
+                ]}
+              />
+            </Field>
+            {formError && (
+              <p className="rounded-lg bg-[#fae9e6] px-3 py-2 text-[11px] text-[#a84e45]">{formError}</p>
+            )}
+            <div className="flex justify-end gap-2 border-t border-[#ebe8df] pt-4">
+              <Button variant="secondary" onClick={() => setModal(false)}>
+                Cancel
+              </Button>
+              <SubmitButton pending={pending}>Add team member</SubmitButton>
+            </div>
+          </form>
+        </Modal>
+      )}
+    </>
+  );
 }
 
 function PlansPage({ plans, loading, error, retry, create, pending, client }: { plans: Plan[]; loading: boolean; error: boolean; retry: () => void; create: ReturnType<typeof useCreatePlan>; pending: boolean; client: ReturnType<typeof useQueryClient> }) {

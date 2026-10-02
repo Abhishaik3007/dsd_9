@@ -252,9 +252,9 @@ protectedRouter.post("/team", async (req, res) => {
   const member = {
     id: `usr_team_${Date.now()}`,
     email: parsed.data.email,
-    name: parsed.data.email.split("@")[0] ?? "Team Member",
+    name: (req.body as any)?.name?.trim() || (parsed.data.email.split("@")[0] ?? "Staff Member"),
     role: parsed.data.role,
-    status: "invited" as const,
+    status: "active" as const,
     businessId: user.businessId || "biz_demo_juniper",
     businessName: user.businessName || "The Juniper Room",
     createdAt: new Date().toISOString(),

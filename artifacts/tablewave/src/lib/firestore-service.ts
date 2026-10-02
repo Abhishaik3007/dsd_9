@@ -47,6 +47,7 @@ export interface FirestoreTeamMember {
   status: 'active' | 'invited';
   businessId: string | null;
   businessName: string | null;
+  password?: string;
   createdAt: string;
 }
 
@@ -561,20 +562,31 @@ export async function handleFirestoreApi(
       if (user.isSuperAdmin) return list;
       return user.businessId ? list.filter((t) => t.businessId === user.businessId) : [];
     }
-    if (cleanUrl === '/api/team/invite' && method === 'POST') {
-      const id = `usr_inv_${Date.now().toString().slice(-6)}`;
+    if ((cleanUrl === '/api/team' || cleanUrl === '/api/team/invite') && method === 'POST') {
+      const id = `usr_staff_${Date.now().toString().slice(-6)}`;
+      const cleanEmail = (body?.email || '').trim().toLowerCase();
       const newMember: FirestoreTeamMember = {
         id,
-        email: body?.email || 'teammate@venue.com',
-        name: body?.email?.split('@')[0] || 'Invited Teammate',
+        email: cleanEmail || 'teammate@venue.com',
+        name: body?.name?.trim() || cleanEmail.split('@')[0] || 'Staff Member',
         role: body?.role || 'staff',
-        status: 'invited',
-        businessId: user.businessId || null,
-        businessName: user.businessName || 'Venue',
+        status: 'active',
+        businessId: user.businessId || body?.businessId || null,
+        businessName: user.businessName || body?.businessName || 'Venue',
+        password: body?.password || undefined,
         createdAt: new Date().toISOString(),
       };
       await setDoc(doc(firestore, 'users', id), newMember);
       return newMember;
+    }
+    if (cleanUrl.startsWith('/api/team/') && method === 'DELETE') {
+      const targetId = cleanUrl.split('/').pop();
+      if (targetId) {
+        try {
+          await deleteDoc(doc(firestore, 'users', targetId));
+        } catch {}
+      }
+      return { success: true };
     }
 
     // 6. /api/outlets
