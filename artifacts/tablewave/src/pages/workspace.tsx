@@ -7,6 +7,7 @@ import {
   CirclePlus, Clock3, Copy, Download, Edit3, ExternalLink, Package,
   Plus, QrCode, Search, Sparkles, Trash2, Users, Utensils, X,
   Building2, Wallet, Store, Eye, EyeOff, Volume2, VolumeX, Bell,
+  ShieldAlert, CalendarX, LogOut, RefreshCw, AlertTriangle,
 } from 'lucide-react';
 import {
   RiStore3Line,
@@ -31,7 +32,7 @@ import QRCode from 'qrcode';
 import { firestore } from '@/lib/firebase';
 import { doc, setDoc } from 'firebase/firestore';
 import { WorkspaceShell } from '@/components/workspace-shell';
-import { AppDatePicker, AppSelect, Button, EmptyState, Field, Modal, PageTitle, QueryState, SubmitButton } from '@/components/shared';
+import { AppDatePicker, AppSelect, BrandMark, Button, EmptyState, Field, Modal, PageTitle, QueryState, SubmitButton } from '@/components/shared';
 import { toast } from '@/hooks/use-toast';
 import { ToastAction } from '@/components/ui/toast';
 import { playOrderChime, flashDocumentTitle, isSoundAlertsEnabled, setSoundAlertsEnabled } from '@/lib/sound-alerts';
@@ -1598,7 +1599,7 @@ export const ROLE_DEFAULT_ROUTE: Record<string, string> = {
 };
 
 export function Workspace() {
-  const { isLoaded, isSignedIn, user: authUser } = useTablewaveAuth();
+  const { isLoaded, isSignedIn, user: authUser, signOut } = useTablewaveAuth();
   const [location, setLocation] = useLocation();
   const client = useQueryClient();
   const route = location.split('/')[1] || 'dashboard';
@@ -1621,11 +1622,9 @@ export function Workspace() {
   });
   const businesses = useListBusinesses({
     query: {
-      enabled: enabled && Boolean(userRole) && (
-        (userRole === 'super_admin' && isRoutePermitted && ['businesses', 'dashboard'].includes(route)) ||
-        (userRole !== 'staff' && ['outlets', 'menu', 'dashboard'].includes(route))
-      ),
+      enabled: enabled && Boolean(userRole),
       queryKey: getListBusinessesQueryKey(),
+      refetchInterval: 5000,
     },
   });
   const team = useListTeam({
@@ -1678,9 +1677,20 @@ export function Workspace() {
 
   const knownOrderIdsRef = useRef<Set<string> | null>(null);
 
+  const businessId = user?.businessId || businesses.data?.[0]?.id || '';
+  const activeBusiness = businesses.data?.find((b) => b.id === businessId) || (user?.businessId ? businesses.data?.find((b) => b.id === user.businessId) : businesses.data?.[0]);
+
+  const isBizExpired = Boolean(
+    activeBusiness?.expiresAt &&
+    !isNaN(new Date(activeBusiness.expiresAt).getTime()) &&
+    new Date(activeBusiness.expiresAt).getTime() < Date.now()
+  );
+  const isBizSuspended = activeBusiness?.status === 'suspended' || activeBusiness?.status === 'inactive' || user?.status === 'suspended';
+  const isLockedOut = Boolean(user && !user.isSuperAdmin && (isBizSuspended || isBizExpired));
+
   // 1. Real-time live Firestore subscription & Cross-tab BroadcastChannel listener
   useEffect(() => {
-    if (!enabled || !['business_admin', 'staff', 'super_admin'].includes(userRole || '')) return;
+    if (!enabled || !['business_admin', 'staff', 'super_admin'].includes(userRole || '') || isLockedOut) return;
 
     // Real-time Firestore onSnapshot subscription
     const unsubscribeFirestore = subscribeToOrders((liveOrders) => {
@@ -1722,10 +1732,11 @@ export function Workspace() {
       if (bc) bc.close();
       window.removeEventListener('tablewave:order-created', onLocalOrder);
     };
-  }, [enabled, userRole, user?.businessId, user?.isSuperAdmin, client]);
+  }, [enabled, userRole, user?.businessId, user?.isSuperAdmin, isLockedOut, client]);
 
   // 2. Chime sound alert & toast notification when a new order arrives
   useEffect(() => {
+    if (isLockedOut) return;
     const list = orders.data;
     if (!list || !Array.isArray(list)) return;
 
@@ -1765,19 +1776,115 @@ export function Workspace() {
     } else {
       list.forEach((o) => knownOrderIdsRef.current!.add(o.id));
     }
-  }, [orders.data, route, setLocation]);
+  }, [orders.data, route, isLockedOut, setLocation]);
 
   if (!isLoaded) return <div className="min-h-[100dvh] bg-[#f5f3ed] p-6"><div className="skeleton mx-auto h-12 max-w-4xl" /><div className="skeleton mx-auto mt-8 h-72 max-w-4xl" /></div>;
   if (!isSignedIn) return <Redirect to="/sign-in" />;
   if ((current.isLoading && !user) || !user) return <div className="min-h-[100dvh] bg-[#f5f3ed] p-6"><div className="skeleton mx-auto h-12 max-w-4xl" /><div className="skeleton mx-auto mt-8 h-72 max-w-4xl" /></div>;
   if (current.isError && !user) return <div className="mx-auto flex min-h-[100dvh] max-w-xl flex-col items-center justify-center px-6 text-center"><div className="font-display text-2xl font-bold">Workspace access is unavailable</div><p className="mt-2 text-sm text-[#77858d]">We couldn’t resolve your Tablewave account. Please try again.</p><Button onClick={() => void current.refetch()} className="mt-5">Try again</Button></div>;
-  if (user.status !== 'active') return <div className="mx-auto flex min-h-[100dvh] max-w-xl flex-col items-center justify-center px-6 text-center"><div className="font-display text-2xl font-bold">Your account is being set up</div><p className="mt-2 text-sm text-[#77858d]">An administrator will finish granting access shortly.</p></div>;
+
+  if (user.status === 'pending') {
+    return (
+      <div className="mx-auto flex min-h-[100dvh] max-w-xl flex-col items-center justify-center px-6 text-center">
+        <div className="font-display text-2xl font-bold">Your account is being set up</div>
+        <p className="mt-2 text-sm text-[#77858d]">An administrator will finish granting access shortly.</p>
+        <button
+          onClick={() => void signOut({ redirectUrl: '/sign-in' })}
+          className="mt-5 text-[11px] font-semibold text-[#16806e] hover:underline cursor-pointer"
+        >
+          Sign out
+        </button>
+      </div>
+    );
+  }
+
+  if (isLockedOut) {
+    return (
+      <div className="min-h-[100dvh] bg-[#f5f3ed] flex flex-col">
+        <header className="border-b border-[#e3dfd3] bg-[#fcfbf8] px-6 py-4">
+          <div className="max-w-4xl mx-auto flex items-center justify-between">
+            <BrandMark />
+            <button
+              onClick={() => void signOut({ redirectUrl: '/sign-in' })}
+              className="flex items-center gap-1.5 rounded-lg border border-[#e2ded5] bg-white px-3 py-1.5 text-[11px] font-semibold text-[#5a6974] hover:bg-[#f6f5f0] transition-colors cursor-pointer"
+            >
+              <LogOut size={13} /> Sign out
+            </button>
+          </div>
+        </header>
+
+        <main className="flex-1 flex items-center justify-center p-6">
+          <div className="max-w-md w-full surface p-7 sm:p-8 text-center shadow-lg border border-[#e3ded2] rounded-[24px]">
+            <div className={`mx-auto mb-4 grid h-14 w-14 place-items-center rounded-2xl ${isBizExpired ? 'bg-[#fff2e2] text-[#c2621f]' : 'bg-[#fae8e6] text-[#b8382c]'}`}>
+              {isBizExpired ? <CalendarX size={28} /> : <ShieldAlert size={28} />}
+            </div>
+
+            <span className={`inline-block rounded-full px-3 py-1 font-mono text-[10px] font-bold uppercase tracking-wider ${isBizExpired ? 'bg-[#fff0df] text-[#b45d1b]' : 'bg-[#fae6e3] text-[#b3372c]'}`}>
+              {isBizExpired ? 'Subscription Expired' : 'Venue Suspended'}
+            </span>
+
+            <h1 className="mt-3 font-display text-[22px] font-bold text-[#2d4254]">
+              {isBizExpired ? 'Subscription Period Ended' : 'Venue Access Suspended'}
+            </h1>
+
+            <p className="mt-2 text-[12px] leading-relaxed text-[#73828c]">
+              {isBizExpired ? (
+                <>
+                  Your plan for <strong className="text-[#3a4f61]">{activeBusiness?.name || user.businessName || 'this venue'}</strong> expired on{' '}
+                  <strong className="text-[#3a4f61]">{activeBusiness?.expiresAt ? new Date(activeBusiness.expiresAt).toLocaleDateString(undefined, { year: 'numeric', month: 'long', day: 'numeric' }) : 'recently'}</strong>.
+                </>
+              ) : (
+                <>
+                  Operational access for <strong className="text-[#3a4f61]">{activeBusiness?.name || user.businessName || 'this venue'}</strong> has been restricted by the platform administrator.
+                </>
+              )}
+            </p>
+
+            <div className="my-5 rounded-xl bg-[#f7f6f0] p-4 text-left border border-[#ece8de]">
+              <p className="text-[11px] font-semibold text-[#485c6c] mb-1">What this means for your venue:</p>
+              <ul className="space-y-1.5 text-[11px] text-[#6d7c86]">
+                <li className="flex items-start gap-2">
+                  <span className="text-[#b8382c] font-bold">•</span>
+                  <span>Guests scanning table QR codes cannot place orders.</span>
+                </li>
+                <li className="flex items-start gap-2">
+                  <span className="text-[#b8382c] font-bold">•</span>
+                  <span>The live orders kitchen display is paused.</span>
+                </li>
+                <li className="flex items-start gap-2">
+                  <span className="text-[#b8382c] font-bold">•</span>
+                  <span>Menu and outlet management is locked until reactivated.</span>
+                </li>
+              </ul>
+            </div>
+
+            <div className="flex flex-col gap-2 pt-2">
+              <button
+                onClick={() => {
+                  void businesses.refetch();
+                  void current.refetch();
+                }}
+                className="flex items-center justify-center gap-1.5 rounded-xl bg-[#16806e] py-2.5 text-[12px] font-bold text-white shadow-sm hover:bg-[#126b5c] transition-all cursor-pointer"
+              >
+                <RefreshCw size={14} /> Refresh Status
+              </button>
+              <button
+                onClick={() => void signOut({ redirectUrl: '/sign-in' })}
+                className="rounded-xl border border-[#dedad0] bg-transparent py-2 text-[11px] font-semibold text-[#6d7c86] hover:bg-[#eae8df] transition-all cursor-pointer"
+              >
+                Sign in with another account
+              </button>
+            </div>
+          </div>
+        </main>
+      </div>
+    );
+  }
 
   if (!isRoutePermitted) {
     const fallback = ROLE_DEFAULT_ROUTE[user.role] || '/dashboard';
     return <Redirect to={fallback} />;
   }
-  const businessId = user.businessId || businesses.data?.[0]?.id || '';
   const loadPage = {
     dashboard: { loading: dashboard.isLoading, error: dashboard.isError, retry: () => void dashboard.refetch() },
     businesses: { loading: businesses.isLoading || plans.isLoading, error: businesses.isError || plans.isError, retry: () => { void businesses.refetch(); void plans.refetch(); } },

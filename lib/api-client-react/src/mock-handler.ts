@@ -759,6 +759,18 @@ export function handleClientMockRequest(
 
   // 12. /api/store/orders (also supports /api/store/order)
   if ((cleanUrl === '/api/store/orders' || cleanUrl === '/api/store/order') && method === 'POST') {
+    const bSlug = String(body?.businessSlug || '').toLowerCase();
+    const targetBiz = db.businesses.find((b) => b.slug?.toLowerCase() === bSlug || b.id === body?.businessSlug) || db.businesses[0];
+    const exp = targetBiz?.expiresAt ? new Date(targetBiz.expiresAt).getTime() : null;
+    const isExpired = exp != null && !isNaN(exp) && exp < Date.now();
+    if (targetBiz?.status === 'suspended' || targetBiz?.status === 'inactive' || isExpired) {
+      throw new Error(
+        isExpired
+          ? 'This venue’s subscription has expired. Online ordering is currently disabled.'
+          : 'Online ordering is currently suspended for this venue.'
+      );
+    }
+
     if (!body?.items || !Array.isArray(body.items) || body.items.length === 0) {
       throw new Error('Your cart is empty. Please add items to place an order.');
     }

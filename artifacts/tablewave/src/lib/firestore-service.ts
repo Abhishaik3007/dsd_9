@@ -364,6 +364,27 @@ export async function handleFirestoreApi(
   try {
     // 1. /api/me
     if (cleanUrl === '/api/me' && method === 'GET') {
+      if (!user.isSuperAdmin && user.businessId) {
+        try {
+          const bDoc = await getDoc(doc(firestore, 'businesses', user.businessId));
+          if (bDoc.exists()) {
+            const b = bDoc.data() as FirestoreBusiness;
+            const exp = b.expiresAt ? new Date(b.expiresAt).getTime() : null;
+            const isExp = exp != null && !isNaN(exp) && exp < Date.now();
+            if (b.status === 'suspended' || b.status === 'inactive' || isExp) {
+              return {
+                ...user,
+                status: 'suspended',
+                businessStatus: b.status,
+                isExpired: isExp,
+                expiresAt: b.expiresAt,
+              };
+            }
+          }
+        } catch (e) {
+          console.warn('[Firestore] Error verifying business status in /api/me:', e);
+        }
+      }
       return user;
     }
 
@@ -686,6 +707,20 @@ export async function handleFirestoreApi(
 
     // 9. /api/orders
     if (cleanUrl === '/api/orders' && method === 'GET') {
+      if (!user.isSuperAdmin && user.businessId) {
+        try {
+          const bDoc = await getDoc(doc(firestore, 'businesses', user.businessId));
+          if (bDoc.exists()) {
+            const b = bDoc.data() as FirestoreBusiness;
+            const exp = b.expiresAt ? new Date(b.expiresAt).getTime() : null;
+            const isExp = exp != null && !isNaN(exp) && exp < Date.now();
+            if (b.status === 'suspended' || b.status === 'inactive' || isExp) {
+              return [];
+            }
+          }
+        } catch {}
+      }
+
       const snap = await getDocs(collection(firestore, 'orders'));
       const list = snap.docs
         .map((d) => d.data() as FirestoreOrder)
@@ -818,13 +853,19 @@ export async function handleFirestoreApi(
       const categories = allCat.filter((c) => c.businessId === targetBiz.id);
       const items = allItems.filter((i) => i.businessId === targetBiz.id);
 
+      const exp = targetBiz.expiresAt ? new Date(targetBiz.expiresAt).getTime() : null;
+      const isExpired = exp != null && !isNaN(exp) && exp < Date.now();
+      const effectiveStatus = (targetBiz.status === 'suspended' || targetBiz.status === 'inactive' || isExpired)
+        ? (isExpired ? 'expired' : (targetBiz.status || 'suspended'))
+        : 'active';
+
       return {
         business: {
           id: targetBiz.id,
           name: targetBiz.name,
           slug: targetBiz.slug,
           type: targetBiz.type,
-          status: targetBiz.status,
+          status: effectiveStatus,
           ownerEmail: targetBiz.ownerEmail,
           planId: targetBiz.planId,
           planName: targetBiz.planName ?? null,
@@ -888,6 +929,20 @@ export async function handleFirestoreApi(
         allOut.find((o) => (o.slug?.toLowerCase() === oSlug || o.id === body?.outletSlug) && o.businessId === targetBiz?.id) ||
         allOut.find((o) => o.businessId === targetBiz?.id) ||
         allOut[0];
+
+      if (!targetBiz) {
+        throw new Error('Venue not found.');
+      }
+
+      const exp = targetBiz.expiresAt ? new Date(targetBiz.expiresAt).getTime() : null;
+      const isExpired = exp != null && !isNaN(exp) && exp < Date.now();
+      if (targetBiz.status === 'suspended' || targetBiz.status === 'inactive' || isExpired) {
+        throw new Error(
+          isExpired
+            ? 'This venue’s subscription has expired. Online ordering is currently disabled.'
+            : 'Online ordering is currently suspended for this venue.'
+        );
+      }
 
       if (!body?.items || !Array.isArray(body.items) || body.items.length === 0) {
         throw new Error('Your cart is empty. Please add items to place an order.');

@@ -2,7 +2,7 @@ import { useMemo, useState } from 'react';
 import { useLocation, useParams } from 'wouter';
 import {
   ArrowLeft, ArrowRight, Check, CheckCircle2, ChevronDown, ChevronUp,
-  Clock3, Minus, Plus, QrCode, ShoppingBag, Utensils, X,
+  Clock3, Minus, Plus, QrCode, ShoppingBag, Utensils, X, AlertTriangle,
 } from 'lucide-react';
 import { getGetStoreMenuQueryKey, useGetStoreMenu, usePlaceStoreOrder, type MenuItem, type Order, type OrderLine } from '@workspace/api-client-react';
 import { BrandMark, Button, Field, Modal, QueryState, SubmitButton, AppSelect } from '@/components/shared';
@@ -27,6 +27,15 @@ export function Storefront() {
   const [formError, setFormError] = useState('');
   const [phoneInput, setPhoneInput] = useState('');
   const data = menu.data;
+  const isSuspended = data?.business?.status === 'suspended' || data?.business?.status === 'inactive';
+  const isExpired = Boolean(
+    data?.business?.status === 'expired' ||
+    (data?.business?.expiresAt &&
+      !isNaN(new Date(data.business.expiresAt).getTime()) &&
+      new Date(data.business.expiresAt).getTime() < Date.now())
+  );
+  const isOrderingDisabled = isSuspended || isExpired;
+
   const filtered = useMemo(() => !data ? [] : data.items.filter((item) => item.available && (category === 'all' || item.categoryId === category)), [data, category]);
   const total = cart.reduce((sum, item) => sum + item.unitPrice * item.quantity, 0);
   const totalQuantity = cart.reduce((sum, item) => sum + item.quantity, 0);
@@ -49,6 +58,7 @@ export function Storefront() {
   }
 
   function addToCart(item: MenuItem, form?: HTMLFormElement) {
+    if (isOrderingDisabled) return;
     const selection = form ? new FormData(form) : null;
     const variantName = String(selection?.get('variant') || item.variants[0]?.name || '');
     const variantPrice = item.variants.find((option) => option.name === variantName)?.price || 0;
@@ -63,10 +73,15 @@ export function Storefront() {
     setSelected(null);
   }
   function alterQuantity(line: CartEntry, amount: number) {
+    if (isOrderingDisabled && amount > 0) return;
     setCart((previous) => previous.map((entry) => entry.key === line.key ? { ...entry, quantity: entry.quantity + amount } : entry).filter((entry) => entry.quantity > 0));
   }
   function submitOrder(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault(); setFormError('');
+    if (isOrderingDisabled) {
+      setFormError(isExpired ? 'Digital ordering has expired for this venue.' : 'Digital ordering is temporarily suspended for this venue.');
+      return;
+    }
     if (cart.length === 0) {
       setFormError('Your cart is empty. Please add items before placing an order.');
       return;
@@ -121,13 +136,33 @@ export function Storefront() {
           <h1 className="relative mt-3 font-display text-[31px] font-bold leading-tight tracking-[-.055em] sm:text-[39px]">{data.business.name}</h1>
           <div className="relative mt-3 flex flex-wrap items-center gap-x-4 gap-y-2 text-[11px] text-[#b3c0c8]"><span>{data.outlet.name}</span><span className="h-1 w-1 rounded-full bg-[#79949d]" /><span>Table {data.tableNumber}</span><span className="h-1 w-1 rounded-full bg-[#79949d]" /><span className="inline-flex items-center gap-1"><Clock3 size={11} /> Order at your pace</span></div>
         </div>
+
+        {isOrderingDisabled && (
+          <div className="mt-4 flex items-center gap-3.5 rounded-2xl border border-[#f2c0b8] bg-[#fff5f4] p-4 text-[#9c362a] shadow-xs">
+            <div className="grid h-9 w-9 shrink-0 place-items-center rounded-xl bg-[#fae5e2] text-[#b8382c]">
+              <AlertTriangle size={18} />
+            </div>
+            <div className="text-[12px] leading-snug">
+              <strong className="font-bold block text-[#2c3e50] mb-0.5">Online Ordering Is Currently Paused</strong>
+              <span className="text-[#7c8b93]">
+                {isExpired
+                  ? 'This venue’s digital service subscription has ended. Menu items are shown for reference only—please place your order directly with your server.'
+                  : 'Digital ordering is temporarily suspended for this venue. Please place your order directly with restaurant staff.'}
+              </span>
+            </div>
+          </div>
+        )}
         <div className="mt-7 grid gap-8 lg:grid-cols-[1fr_320px]">
           <div>
             <div className="mb-5 flex gap-2 overflow-x-auto pb-1">{[{ id: 'all', name: 'All' }, ...data.categories.map((item) => ({ id: item.id, name: item.name }))].map((item) => <button key={item.id} onClick={() => setCategory(item.id)} data-testid={`button-store-category-${item.id}`} className={`whitespace-nowrap rounded-full border px-4 py-2 text-[10px] font-semibold transition-colors ${category === item.id ? 'border-[#16806e] bg-[#16806e] text-white' : 'border-[#e2dfd7] bg-[#fbfaf6] text-[#63727c] hover:border-[#a7cabb]'}`}>{item.name}</button>)}</div>
             {filtered.length ? <div className="space-y-3">{filtered.map((item) => <article key={item.id} className="surface flex items-center gap-3 p-3 sm:gap-4 sm:p-4" data-testid={`store-item-${item.id}`}>
               <div className="grid h-[76px] w-[76px] shrink-0 place-items-center overflow-hidden rounded-[15px] bg-[#e8eee7] sm:h-[88px] sm:w-[88px]">{item.imageUrl ? <img src={item.imageUrl} alt={item.name} className="h-full w-full object-cover" /> : <Utensils size={21} className="text-[#8ba697]" />}</div>
               <div className="min-w-0 flex-1"><p className="text-[13px] font-bold text-[#32485a]">{item.name}</p><p className="mt-1 line-clamp-2 text-[10px] leading-4 text-[#849096]">{item.description || item.categoryName}</p><p className="mt-2 font-mono text-[11px] font-semibold text-[#395165]">{formatMoney(item.price)}</p></div>
-              {(() => {
+              {isOrderingDisabled ? (
+                <span className="rounded-xl border border-[#e4e1d7] bg-[#f2f1eb] px-3 py-1.5 font-mono text-[10px] font-semibold text-[#828f95]">
+                  Ordering paused
+                </span>
+              ) : (() => {
                 const count = getItemCount(item.id);
                 if (count > 0) {
                   return (
@@ -175,12 +210,28 @@ export function Storefront() {
               })()}
             </article>)}</div> : <div className="rounded-[18px] border border-dashed border-[#dcd9d0] bg-[#fbfaf6] px-6 py-12 text-center"><p className="font-display font-bold">Nothing on the menu in this section.</p><p className="mt-1 text-[11px] text-[#849095]">Try another category.</p></div>}
           </div>
-          <aside className="hidden lg:block"><div className="surface sticky top-[88px] p-5"><div className="flex items-center justify-between"><h2 className="font-display text-[16px] font-bold">Your order</h2><span className="rounded-full bg-[#f0efe8] px-2 py-1 font-mono text-[9px] text-[#728089]">{totalQuantity} items</span></div>
-            {cart.length ? <><div className="mt-3 max-h-[42vh] overflow-y-auto">{cart.map((line) => <CartLineRow key={line.key} line={line} decrement={() => alterQuantity(line, -1)} increment={() => alterQuantity(line, 1)} />)}</div><div className="mt-2 flex items-center justify-between border-t border-[#eae8df] pt-4"><span className="text-[11px] text-[#78868c]">Subtotal</span><span className="font-display text-[17px] font-bold">{formatMoney(total)}</span></div><Button onClick={() => setCheckoutOpen(true)} className="mt-4 w-full">Continue to checkout <ArrowRight size={15} /></Button></> : <div className="py-10 text-center"><span className="mx-auto grid h-11 w-11 place-items-center rounded-[14px] bg-[#f0efe8] text-[#88959a]"><ShoppingBag size={18} /></span><p className="mt-3 text-[11px] font-semibold text-[#667780]">Your order starts here</p><p className="mt-1 text-[10px] text-[#96a0a0]">Add something you love.</p></div>}
-          </div></aside>
+          <aside className="hidden lg:block">
+            {isOrderingDisabled ? (
+              <div className="surface sticky top-[88px] p-6 text-center border border-[#e8e5dc] rounded-2xl">
+                <div className="mx-auto mb-3 grid h-12 w-12 place-items-center rounded-2xl bg-[#fae8e6] text-[#b8382c]">
+                  <AlertTriangle size={22} />
+                </div>
+                <h3 className="font-display text-[15px] font-bold text-[#32485a]">Ordering Offline</h3>
+                <p className="mt-2 text-[11px] leading-relaxed text-[#7c8b93]">
+                  {isExpired
+                    ? 'Digital ordering has expired for this venue. Please ask your server for a physical menu.'
+                    : 'Digital ordering is temporarily paused. Please place your order directly with your server.'}
+                </p>
+              </div>
+            ) : (
+              <div className="surface sticky top-[88px] p-5"><div className="flex items-center justify-between"><h2 className="font-display text-[16px] font-bold">Your order</h2><span className="rounded-full bg-[#f0efe8] px-2 py-1 font-mono text-[9px] text-[#728089]">{totalQuantity} items</span></div>
+                {cart.length ? <><div className="mt-3 max-h-[42vh] overflow-y-auto">{cart.map((line) => <CartLineRow key={line.key} line={line} decrement={() => alterQuantity(line, -1)} increment={() => alterQuantity(line, 1)} />)}</div><div className="mt-2 flex items-center justify-between border-t border-[#eae8df] pt-4"><span className="text-[11px] text-[#78868c]">Subtotal</span><span className="font-display text-[17px] font-bold">{formatMoney(total)}</span></div><Button onClick={() => setCheckoutOpen(true)} className="mt-4 w-full">Continue to checkout <ArrowRight size={15} /></Button></> : <div className="py-10 text-center"><span className="mx-auto grid h-11 w-11 place-items-center rounded-[14px] bg-[#f0efe8] text-[#88959a]"><ShoppingBag size={18} /></span><p className="mt-3 text-[11px] font-semibold text-[#667780]">Your order starts here</p><p className="mt-1 text-[10px] text-[#96a0a0]">Add something you love.</p></div>}
+              </div>
+            )}
+          </aside>
         </div>
       </div>
-      {cart.length > 0 && <div className="fixed inset-x-0 bottom-0 z-30 border-t border-[#e5e2da] bg-[#fbfaf6]/95 p-3 backdrop-blur-lg lg:hidden"><button onClick={() => setCheckoutOpen(true)} data-testid="button-open-cart" className="mx-auto flex w-full max-w-[650px] items-center justify-between rounded-[13px] bg-[#16806e] px-4 py-3 text-white shadow-[0_8px_24px_rgba(22,128,110,.2)]"><span className="flex items-center gap-2 text-[12px] font-bold"><ShoppingBag size={16} /> View order <span className="rounded-full bg-white/20 px-2 py-0.5 font-mono text-[9px]">{totalQuantity}</span></span><span className="flex items-center gap-1.5 text-[12px] font-bold">{formatMoney(total)} <ArrowRight size={14} /></span></button></div>}
+      {!isOrderingDisabled && cart.length > 0 && <div className="fixed inset-x-0 bottom-0 z-30 border-t border-[#e5e2da] bg-[#fbfaf6]/95 p-3 backdrop-blur-lg lg:hidden"><button onClick={() => setCheckoutOpen(true)} data-testid="button-open-cart" className="mx-auto flex w-full max-w-[650px] items-center justify-between rounded-[13px] bg-[#16806e] px-4 py-3 text-white shadow-[0_8px_24px_rgba(22,128,110,.2)]"><span className="flex items-center gap-2 text-[12px] font-bold"><ShoppingBag size={16} /> View order <span className="rounded-full bg-white/20 px-2 py-0.5 font-mono text-[9px]">{totalQuantity}</span></span><span className="flex items-center gap-1.5 text-[12px] font-bold">{formatMoney(total)} <ArrowRight size={14} /></span></button></div>}
       {selected && <Modal title={selected.name} subtitle={selected.description} onClose={() => setSelected(null)}><form onSubmit={(event) => { event.preventDefault(); addToCart(selected, event.currentTarget); }} className="space-y-4">
         {selected.variants.length > 0 && <Field label="Choose a size"><AppSelect name="variant" defaultValue={selected.variants[0]?.name} options={selected.variants.map((variant) => ({ value: variant.name, label: variant.name + (variant.price ? ` · +${formatMoney(variant.price)}` : '') }))} /></Field>}
         {selected.addOns.length > 0 && <fieldset><legend className="mb-2 text-[12px] font-semibold text-[#53616e]">Add something extra</legend><div className="space-y-2">{selected.addOns.map((addOn) => <label key={addOn.name} className="flex items-center justify-between rounded-xl border border-[#e7e4dc] bg-white/60 px-3 py-2.5 text-[11px] text-[#556774]"><span className="flex items-center gap-2"><input type="checkbox" name="addOn" value={addOn.name} className="h-4 w-4 accent-[#16806e]" />{addOn.name}</span><span className="font-mono text-[10px]">+{formatMoney(addOn.price)}</span></label>)}</div></fieldset>}
