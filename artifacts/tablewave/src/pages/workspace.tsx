@@ -217,21 +217,23 @@ function Overview({
             : 'A clear view of orders, sales, and kitchen activity across your venue.'
         }
         action={
-          <div className="w-[145px]">
-            <AppSelect
-              name="timeframe"
-              value={timeframe}
-              onChange={(v) => setTimeframe(v as typeof timeframe)}
-              testId="select-overview-timeframe"
-              options={[
-                { value: 'today', label: 'Today' },
-                { value: 'yesterday', label: 'Yesterday' },
-                { value: '7d', label: 'Last 7 Days' },
-                { value: '30d', label: 'Last 30 Days' },
-                { value: 'all', label: 'All Time' },
-              ]}
-            />
-          </div>
+          isSuperAdmin ? undefined : (
+            <div className="w-[145px]">
+              <AppSelect
+                name="timeframe"
+                value={timeframe}
+                onChange={(v) => setTimeframe(v as typeof timeframe)}
+                testId="select-overview-timeframe"
+                options={[
+                  { value: 'today', label: 'Today' },
+                  { value: 'yesterday', label: 'Yesterday' },
+                  { value: '7d', label: 'Last 7 Days' },
+                  { value: '30d', label: 'Last 30 Days' },
+                  { value: 'all', label: 'All Time' },
+                ]}
+              />
+            </div>
+          )
         }
       />
       <QueryState loading={loading} error={error} retry={retry}>
@@ -253,8 +255,12 @@ function Overview({
                     icon: RiPriceTag3Line,
                   },
                   {
-                    label: `Platform Volume (${timeframeLabels[timeframe]})`,
-                    value: money(venueRevenue || dashboard?.revenue || 0),
+                    label: 'Platform Volume',
+                    value: money(
+                      dashboard?.revenue !== undefined
+                        ? dashboard.revenue
+                        : orders.reduce((sum, o) => sum + (o.total || 0), 0)
+                    ),
                     note: 'Total diner transactions captured',
                     icon: BarChart3,
                   },
@@ -1910,7 +1916,7 @@ function OrdersPage({ orders, loading, error, retry, client }: { orders: Order[]
 
 function AnalyticsPage({ user, analytics, loading, error, retry }: { user: CurrentUser; analytics: Analytics | undefined; loading: boolean; error: boolean; retry: () => void }) {
   const isSuperAdmin = user.role === 'super_admin';
-  return <><PageTitle eyebrow={isSuperAdmin ? 'Platform / Revenue' : 'Reports / Performance'} title={isSuperAdmin ? 'Platform-wide Analytics' : 'See what guests love.'} description={isSuperAdmin ? 'A clear read on platform gross merchandise volume, transaction volume, and overall venue adoption.' : 'A clear read on revenue, repeat favorites and the shape of your dining service.'} action={<button className="btn-secondary" onClick={() => window.print()} data-testid="button-export-analytics"><Download size={15} /> Export view</button>} />
+  return <><PageTitle eyebrow={isSuperAdmin ? 'Platform / Revenue' : 'Reports / Performance'} title={isSuperAdmin ? 'Platform-wide Analytics' : 'See what guests love.'} description={isSuperAdmin ? 'A clear read on platform gross merchandise volume, transaction volume, and overall venue adoption.' : 'A clear read on revenue, repeat favorites and the shape of your dining service.'} />
     <QueryState loading={loading} error={error} retry={retry}><>
       <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
         <StatCard label={isSuperAdmin ? 'Platform GMV' : 'Revenue'} value={money(analytics?.revenue ?? 0)} note={isSuperAdmin ? 'Total captured across all venues' : 'Revenue in this period'} icon={BarChart3} accent />
