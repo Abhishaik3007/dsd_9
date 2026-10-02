@@ -33,6 +33,7 @@ import { firestore } from '@/lib/firebase';
 import { doc, setDoc, deleteDoc } from 'firebase/firestore';
 import { WorkspaceShell } from '@/components/workspace-shell';
 import { AppDatePicker, AppSelect, BrandMark, Button, EmptyState, Field, Modal, PageTitle, QueryState, SubmitButton } from '@/components/shared';
+import { ImageUploader } from '@/components/image-uploader';
 import { toast } from '@/hooks/use-toast';
 import { ToastAction } from '@/components/ui/toast';
 import { playOrderChime, flashDocumentTitle, isSoundAlertsEnabled, setSoundAlertsEnabled } from '@/lib/sound-alerts';
@@ -1379,22 +1380,12 @@ function MenuPage({ businessId, categories, items, loading, error, retry, client
       <Field label="Price"><input className="field" name="price" type="number" step="0.01" min="0" required defaultValue={itemModal === 'new' ? '' : itemModal.price} placeholder="14.50" data-testid="input-item-price" /></Field>
       <div className="sm:col-span-2"><Field label="Description"><textarea className="field min-h-[78px] resize-y" name="description" defaultValue={itemModal === 'new' ? '' : itemModal.description} placeholder="A short, lovely description." data-testid="input-item-description" /></Field></div>
       <div className="sm:col-span-2">
-        <Field label="Photo URL" hint="Paste URL or click a preset below">
-          <input className="field" type="url" name="imageUrl" value={photoUrlValue} onChange={(e) => setPhotoUrlValue(e.target.value)} placeholder="https://…" data-testid="input-item-image" />
-        </Field>
-        <div className="mt-2 flex flex-wrap items-center gap-1.5">
-          <span className="text-[10px] text-[#7d8b94] font-semibold mr-1">Presets:</span>
-          {FOOD_PHOTO_PRESETS.map((preset) => (
-            <button
-              key={preset.label}
-              type="button"
-              onClick={() => setPhotoUrlValue(preset.url)}
-              className="rounded-md border border-[#e2ded5] bg-[#fbfaf6] px-2 py-1 text-[10px] font-semibold text-[#546672] hover:border-[#16806e] hover:text-[#16806e] transition-colors"
-            >
-              {preset.label}
-            </button>
-          ))}
-        </div>
+        <ImageUploader
+          value={photoUrlValue}
+          onChange={setPhotoUrlValue}
+          presets={FOOD_PHOTO_PRESETS}
+        />
+        <input type="hidden" name="imageUrl" value={photoUrlValue} />
       </div>
       <Field label="Variants" hint="Separate choices with commas, e.g. Small:0, Large:3"><input className="field" name="variants" defaultValue={itemModal === 'new' ? '' : itemModal.variants.map((choice) => `${choice.name}:${choice.price}`).join(', ')} placeholder="Regular:0, Large:3" data-testid="input-item-variants" /></Field>
       <Field label="Add-ons" hint="Separate choices with commas, e.g. Avocado:2"><input className="field" name="addOns" defaultValue={itemModal === 'new' ? '' : itemModal.addOns.map((choice) => `${choice.name}:${choice.price}`).join(', ')} placeholder="Extra herbs:1.5" data-testid="input-item-addons" /></Field>
